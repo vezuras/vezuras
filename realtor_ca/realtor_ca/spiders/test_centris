@@ -1,0 +1,147 @@
+import scrapy
+from scrapy.selector import Selector
+import json
+from scrapy.spiders import CrawlSpider, Rule
+from urllib.parse import urljoin
+
+
+class CentrisSpider(CrawlSpider):
+    name = 'centris'
+    allowed_domains = ['centris.ca']
+
+    position = {
+        "startPosition":12
+        }
+
+    def start_requests(self):
+        query = {
+            "query": {
+                "UseGeographyShapes": 0,
+                "Filters": [
+                    {
+                        "MatchType": "CityDistrictAll",
+                        "Text": "",
+                        "Id": ""
+                    }
+                ],
+                "FieldsValues": [
+                    {
+                        "fieldId": "CityDistrictAll",
+                        "value": "",
+                        "fieldConditionId": "",
+                        "valueConditionId": ""
+                    },
+                    {
+                        "fieldId": "Category",
+                        "value": "Residential",
+                        "fieldConditionId": "",
+                        "valueConditionId": ""
+                    },
+                    {
+                        "fieldId": "SellingType",
+                        "value": "Sale",
+                        "fieldConditionId": "",
+                        "valueConditionId": ""
+                    },
+                    {
+                        "fieldId": "LandArea",
+                        "value": "SquareFeet",
+                        "fieldConditionId": "IsLandArea",
+                        "valueConditionId": ""
+                    },
+                    {
+                        "fieldId": "SalePrice",
+                        "value": 0,
+                        "fieldConditionId": "ForSale",
+                        "valueConditionId": ""
+                    },
+                    {
+                        "fieldId": "SalePrice",
+                        "value": 999999999999,
+                        "fieldConditionId": "ForSale",
+                        "valueConditionId": ""
+                    }
+                ]
+            },
+            "isHomePage": True
+        }
+        yield scrapy.Request(
+            url='https://www.centris.ca/property/UpdateQuery',
+            method='POST',
+            body=json.dumps(query),
+            headers={
+                'Content-Type': 'application/json'
+            },
+            callback=self.update_query
+        )
+
+
+    def update_query(self, response):
+        yield scrapy.Request(
+            url='https://www.centris.ca/Property/GetInscriptions',
+            method='POST',
+            body=json.dumps(self.position),
+            headers={
+                'Content-Type': 'application/json'
+            },
+            callback=self.parse
+        )
+
+
+    def parse(self, response):
+        resp_dict = json.loads(response.body)
+        html = resp_dict.get('d').get('Result').get('html')
+        parse_html = Selector(text=html)
+        listings = parse_html.xpath("//div[@class='property-thumbnail-item thumbnailItem col-12 col-sm-6 col-md-4 col-lg-3']")
+        for listing in listings:
+            item = {}
+            item['source'] = 'Centris'
+            
+            item['price'] = listing.xpath(".//div[@class='price']/span[1]/text()").get()
+            if item['price']:
+                item['price'] = item['price'].strip().encode('utf-8').decode('utf-8').replace('\xa0', '')
+            
+            # Nettoyage des valeurs pour les autres clés
+            item['civic_address'] = listing.xpath(".//div[@class='location-container']/span[@class='address']/div[1]/text()").get()
+            if item['civic_address']:
+                item['civic_address'] = item['civic_address'].strip().encode('utf-8').decode('utf-8')
+            
+            item['country'] = listing.xpath(".//div[@class='location-container']/span[@class='address']/div[2]/text()").get()
+            if item['country']:
+                item['country'] = item['country'].strip().encode('utf-8').decode('utf-8')
+
+            item['city'] = listing.xpath(".//div[@class='location-container']/span[@class='address']/div[3]/text()").get()
+            if item['city']:
+                item['city'] = item['city'].strip().encode('utf-8').decode('utf-8')
+            
+            item['category'] = listing.xpath(".//span[@itemprop='category']/div/text()").get()
+            if item['category']:
+                item['category'] = item['category'].strip().encode('utf-8').decode('utf-8')
+                
+            image_url = listing.xpath(".//img[@itemprop='image']/@src")
+            if image_url:
+                item['image_url'] = image_url.get()
+            
+            summary_url = listing.xpath(".//a[@class='property-thumbnail-summary-link'][1]/@href")
+            if summary_url:
+                summary_url = summary_url.get()
+                item['summary_url'] = urljoin('https://www.centris.ca', summary_url)
+            
+            yield item
+
+        count = resp_dict.get('d').get('Result').get('count')
+        inscNumberPerPage = resp_dict.get('d').get('Result').get('inscNumberPerPage')
+
+        if self.position['startPosition'] < count:
+            self.position['startPosition'] += inscNumberPerPage
+            yield scrapy.Request(
+                url='https://www.centris.ca/Property/GetInscriptions',
+                method='POST',
+                body=json.dumps(self.position),
+                headers={
+                    'Content-Type': 'application/json'
+                },
+                callback=self.parse
+            )
+
+
