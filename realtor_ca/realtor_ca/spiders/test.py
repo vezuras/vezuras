@@ -14,14 +14,13 @@ class TestSpider(scrapy.Spider):
     allowed_domains = ['www.centris.ca']
 
     position = {"startPosition": 0}
-    
-    def save_state(self):
-       dump(self.position, "position.joblib")
-            
-            
+    increment_numer = 12
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     driver = webdriver.Chrome(options=chrome_options)
+
+    def save_state(self):
+           dump(self.position, "position.joblib")
 
 
     def start_requests(self):
@@ -118,7 +117,7 @@ class TestSpider(scrapy.Spider):
         increment_numer = resp_dict.get('d').get('Result').get('inscNumberPerPage')
 
         if self.position['startPosition'] <= count:
-            self.position['startPosition'] += increment_numer
+            self.position['startPosition'] += self.increment_numer
             self.save_state()
             yield scrapy.Request(
                 url='https://www.centris.ca/Property/GetInscriptions',
