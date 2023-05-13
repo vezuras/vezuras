@@ -9,17 +9,19 @@ from joblib import dump, load
 import os
 
 
-class CentrisSpider(scrapy.Spider):
+class TestSpider(scrapy.Spider):
     name = 'test'
     allowed_domains = ['www.centris.ca']
 
     position = {"startPosition": 0}
+    
+    def save_state(self):
+       dump(self.position, "position.joblib")
+            
+            
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     driver = webdriver.Chrome(options=chrome_options)
-
-    def save_state(self):
-           dump(self.position, "position.joblib")
 
 
     def start_requests(self):
