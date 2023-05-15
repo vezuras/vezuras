@@ -5,69 +5,107 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 import json
-from joblib import dump, load
 import os
 
 
-class TestSpider(scrapy.Spider):
-    name = 'test'
+class Bot2Spider(scrapy.Spider):
+    name = 'bot2'
     allowed_domains = ['www.centris.ca']
 
     position = {"startPosition": 0}
+    annonce_count = 0
     increment_numer = 12
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     driver = webdriver.Chrome(options=chrome_options)
 
-    def save_state(self):
-           dump(self.position, "position.joblib")
-
 
     def start_requests(self):
-        try:
-            self.position = load("position.joblib")
-        except FileNotFoundError:
-            pass
-
         query = {
-            "query": {
-                "UseGeographyShapes": 0,
-                "Filters": [],
-                "FieldsValues": [
+            "query":{
+                "UseGeographyShapes":0,
+                "Filters":[
+                    
+                ],
+                "FieldsValues":[
                     {
-                        "fieldId": "Category",
-                        "value": "Residential",
-                        "fieldConditionId": "",
-                        "valueConditionId": ""
+                        "fieldId":"PropertyType",
+                        "value":"SingleFamilyHome",
+                        "fieldConditionId":"",
+                        "valueConditionId":"IsResidential"
                     },
                     {
-                        "fieldId": "SellingType",
-                        "value": "Sale",
-                        "fieldConditionId": "",
-                        "valueConditionId": ""
+                        "fieldId":"Category",
+                        "value":"Residential",
+                        "fieldConditionId":"",
+                        "valueConditionId":""
                     },
                     {
-                        "fieldId": "LandArea",
-                        "value": "SquareFeet",
-                        "fieldConditionId": "IsLandArea",
-                        "valueConditionId": ""
+                        "fieldId":"SellingType",
+                        "value":"Sale",
+                        "fieldConditionId":"",
+                        "valueConditionId":""
                     },
                     {
-                        "fieldId": "SalePrice",
-                        "value": 0,
-                        "fieldConditionId": "ForSale",
-                        "valueConditionId": ""
+                        "fieldId":"LandArea",
+                        "value":"SquareFeet",
+                        "fieldConditionId":"IsLandArea",
+                        "valueConditionId":""
                     },
                     {
-                        "fieldId": "SalePrice",
-                        "value": 999999999999,
-                        "fieldConditionId": "ForSale",
-                        "valueConditionId": ""
+                        "fieldId":"SalePrice",
+                        "value":0,
+                        "fieldConditionId":"ForSale",
+                        "valueConditionId":""
+                    },
+                    {
+                        "fieldId":"SalePrice",
+                        "value":999999999999,
+                        "fieldConditionId":"ForSale",
+                        "valueConditionId":""
                     }
                 ]
             },
-            "isHomePage": True
+            "isHomePage":True
         }
+        #     "query": {
+        #         "UseGeographyShapes": 0,
+        #         "Filters": [],
+        #         "FieldsValues": [
+        #             {
+        #                 "fieldId": "Category",
+        #                 "value": "Residential",
+        #                 "fieldConditionId": "",
+        #                 "valueConditionId": ""
+        #             },
+        #             {
+        #                 "fieldId": "SellingType",
+        #                 "value": "Sale",
+        #                 "fieldConditionId": "",
+        #                 "valueConditionId": ""
+        #             },
+        #             {
+        #                 "fieldId": "LandArea",
+        #                 "value": "SquareFeet",
+        #                 "fieldConditionId": "IsLandArea",
+        #                 "valueConditionId": ""
+        #             },
+        #             {
+        #                 "fieldId": "SalePrice",
+        #                 "value": 0,
+        #                 "fieldConditionId": "ForSale",
+        #                 "valueConditionId": ""
+        #             },
+        #             {
+        #                 "fieldId": "SalePrice",
+        #                 "value": 999999999999,
+        #                 "fieldConditionId": "ForSale",
+        #                 "valueConditionId": ""
+        #             }
+        #         ]
+        #     },
+        #     "isHomePage": True
+        # }
         yield scrapy.Request(
             url='https://www.centris.ca/property/UpdateQuery',
             method='POST',
@@ -101,6 +139,8 @@ class TestSpider(scrapy.Spider):
             category = category.strip()
             address = listing.xpath(".//span[@class='address']/div/text()").getall()
             url = listing.xpath(".//a[@class='a-more-detail']/@href").get()
+            url_en = listing.xpath(".//a[@class='a-more-detail']/@href").get()
+            url_fr = url.replace("/en", "/fr")
 
             yield scrapy.Request(
                 url=response.urljoin(url),
@@ -109,46 +149,44 @@ class TestSpider(scrapy.Spider):
                     'category': category,
                     'price': price,
                     'address': address,
-                    'url': response.urljoin(url)
+                    'url': response.urljoin(url_en)
                 }
             )
 
-        count = resp_dict.get('d').get('Result').get('count')
-        increment_numer = resp_dict.get('d').get('Result').get('inscNumberPerPage')
+        # count = resp_dict.get('d').get('Result').get('count')
 
-        if self.position['startPosition'] <= count:
-            self.position['startPosition'] += self.increment_numer
-            self.save_state()
-            yield scrapy.Request(
-                url='https://www.centris.ca/Property/GetInscriptions',
-                method='POST',
-                body=json.dumps(self.position),
-                headers={
-                    'Content-Type': 'application/json'
-                },
-                callback=self.parse
-            )
+        # if self.position['startPosition'] <= count:
+        #     self.position['startPosition'] += self.increment_numer
+        #     yield scrapy.Request(
+        #         url='https://www.centris.ca/Property/GetInscriptions',
+        #         method='POST',
+        #         body=json.dumps(self.position),
+        #         headers={
+        #             'Content-Type': 'application/json'
+        #         },
+        #         callback=self.parse
+        #     )
 
 
     def parse_summary(self, response):
+        url = response.meta.get('url')
+        self.annonce_count += 1
         category = response.xpath("//span[@data-id='PageTitle']/text()").get()
         price = response.xpath("//span[@id='BuyPrice']/text()").get()
         address = response.xpath("//h2[@itemprop='address']/text()").get()
         latitude = response.xpath("//meta[@itemprop='latitude']/@content").get()
         longitude = response.xpath("//meta[@itemprop='longitude']/@content").get()
         yield {
-            'category': category,
+            'id': self.annonce_count,
+            'category':"",
+            'title': category,
             'price': price,
             'address': address,
             'latitude': latitude,
             'longitude': longitude,
+            'url': url
             }
-        self.save_state()
 
     def closed(self, reason):
         self.driver.quit()
-        try:
-           os.remove("position.joblib")
-        except FileNotFoundError:
-            pass
-
+        print('Spider closed: ', reason)
