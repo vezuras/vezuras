@@ -8,25 +8,35 @@ import json
 import os
 
 
-class Bot2Spider(scrapy.Spider):
-    name = 'bot2'
+class Bot3Spider(scrapy.Spider):
+    name = 'bot3'
     allowed_domains = ['www.centris.ca']
 
     position = {"startPosition": 0}
     annonce_count = 0
-    increment_numer = 12
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     driver = webdriver.Chrome(options=chrome_options)
 
 
     def start_requests(self):
+        yield scrapy.Request(url='https://www.centris.ca/UserContext/Lock',
+                             method='POST',
+                             headers={
+                                 'x-requested-with': 'XMLHttpRequest',
+                                 'content-type': 'application/json'
+                             },
+                             body=json.dumps({'uc': 0}),
+                             callback=self.generate_uck_SingleFamilyHome)
+        
+        
+
+    def generate_uck_SingleFamilyHome(self, response):
+        uck = response.body
         query = {
             "query":{
                 "UseGeographyShapes":0,
-                "Filters":[
-                    
-                ],
+                "Filters":[],
                 "FieldsValues":[
                     {
                         "fieldId":"PropertyType",
@@ -68,66 +78,29 @@ class Bot2Spider(scrapy.Spider):
             },
             "isHomePage":True
         }
-        #     "query": {
-        #         "UseGeographyShapes": 0,
-        #         "Filters": [],
-        #         "FieldsValues": [
-        #             {
-        #                 "fieldId": "Category",
-        #                 "value": "Residential",
-        #                 "fieldConditionId": "",
-        #                 "valueConditionId": ""
-        #             },
-        #             {
-        #                 "fieldId": "SellingType",
-        #                 "value": "Sale",
-        #                 "fieldConditionId": "",
-        #                 "valueConditionId": ""
-        #             },
-        #             {
-        #                 "fieldId": "LandArea",
-        #                 "value": "SquareFeet",
-        #                 "fieldConditionId": "IsLandArea",
-        #                 "valueConditionId": ""
-        #             },
-        #             {
-        #                 "fieldId": "SalePrice",
-        #                 "value": 0,
-        #                 "fieldConditionId": "ForSale",
-        #                 "valueConditionId": ""
-        #             },
-        #             {
-        #                 "fieldId": "SalePrice",
-        #                 "value": 999999999999,
-        #                 "fieldConditionId": "ForSale",
-        #                 "valueConditionId": ""
-        #             }
-        #         ]
-        #     },
-        #     "isHomePage": True
-        # }
         yield scrapy.Request(
-            url='https://www.centris.ca/property/UpdateQuery',
-            method='POST',
+            url="https://www.centris.ca/property/UpdateQuery",
+            method="POST",
             body=json.dumps(query),
-            headers={'Content-Type': 'application/json'},
-            callback=self.update_query
-        )
-
-
-    def update_query(self, response):
-        yield scrapy.Request(
-            url='https://www.centris.ca/Property/GetInscriptions',
-            method='POST',
-            body=json.dumps(self.position),
             headers={
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'x-requested-with': 'XMLHttpRequest',
+                'x-centris-uc': 0,
+                'x-centris-uck': uck
             },
-            callback=self.parse
-        )
+            callback=self.update_query_SingleFamilyHome)
+            
+
+    def update_query_SingleFamilyHome(self,response):
+        yield scrapy.Request(
+            url="https://www.centris.ca/Property/GetInscriptions",
+            method="POST",
+            body=json.dumps(self.position),
+            headers={'Content-Type': 'application/json'},
+            callback=self.parse_SingleFamilyHome)
 
 
-    def parse(self, response):
+    def parse_SingleFamilyHome(self, response):
         resp_dict = json.loads(response.body)
         html = resp_dict.get('d').get('Result').get('html')
         parse_html = Selector(text=html)
@@ -153,19 +126,19 @@ class Bot2Spider(scrapy.Spider):
                 }
             )
 
-        # count = resp_dict.get('d').get('Result').get('count')
-
-        # if self.position['startPosition'] <= count:
-        #     self.position['startPosition'] += self.increment_numer
-        #     yield scrapy.Request(
-        #         url='https://www.centris.ca/Property/GetInscriptions',
-        #         method='POST',
-        #         body=json.dumps(self.position),
-        #         headers={
-        #             'Content-Type': 'application/json'
-        #         },
-        #         callback=self.parse
-        #     )
+        count = resp_dict.get('d').get('Result').get('count')
+        increment_number = resp_dict.get('d').get('Result').get('inscNumberPerPage')
+        if self.position['startPosition'] <= count:
+            self.position['startPosition'] += increment_number
+            yield scrapy.Request(
+                url='https://www.centris.ca/Property/GetInscriptions',
+                method='POST',
+                body=json.dumps(self.position),
+                headers={
+                    'Content-Type': 'application/json'
+                },
+                callback=self.parse_SingleFamilyHome
+            )
 
 
     def parse_summary(self, response):
