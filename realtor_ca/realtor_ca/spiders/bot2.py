@@ -6,12 +6,13 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 
 class Bot2Spider(scrapy.Spider):
     name = 'bot2'
     allowed_domains = ['www.centris.ca']
-
+    webstite_url = ['https://www.centris.ca']
     position = {"startPosition": 0}
     annonce_count = 0
     chrome_options = Options()
@@ -108,27 +109,18 @@ class Bot2Spider(scrapy.Spider):
         html = resp_dict.get('d').get('Result').get('html')
         parse_html = Selector(text=html)
         listings = parse_html.xpath("//div[@itemtype='http://schema.org/Product']")
-        for listing in listings:
-            price = listing.xpath(".//div[@class='price']/span/text()").get()
-            price = price.strip()
-            category = listing.xpath(".//span[@itemprop='category']/div/text()").get()
-            category = category.strip()
-            address = listing.xpath(".//span[@class='address']/div/text()").getall()
-            url = listing.xpath(".//a[@class='a-more-detail']/@href").get()
-            url_en = listing.xpath(".//a[@class='a-more-detail']/@href").get()
-            url_fr = url.replace("/en", "/fr")
 
-            yield scrapy.Request(
-                url=response.urljoin(url),
-                callback=self.parse_summary,
-                meta={
-                    'category': category,
-                    'price': price,
-                    'address': address,
-                    'url': url
-                },
-                dont_filter=True # ajout de l'option dont_filter pour ne pas filtrer les requêtes
-            )
+        # Utilisation du multi-threading pour exécuter les requêtes en parallèle
+        with ThreadPoolExecutor() as executor:
+            futures = []
+            for listing in listings:
+                future = executor.submit(self.parse_listing, self.webstite_url, listing)
+                futures.append(future)
+
+            for future in futures:
+                results = future.result()
+                for result in results:
+                    yield result
 
         count = resp_dict.get('d').get('Result').get('count')
         increment_number = resp_dict.get('d').get('Result').get('inscNumberPerPage')
@@ -142,8 +134,51 @@ class Bot2Spider(scrapy.Spider):
                     'Content-Type': 'application/json'
                 },
                 callback=self.parse_SingleFamilyHome,
-                dont_filter=True # ajout de l'option dont_filter pour ne pas filtrer les requêtes
+                dont_filter=True
             )
+
+            count = resp_dict.get('d').get('Result').get('count')
+            increment_number = resp_dict.get('d').get('Result').get('inscNumberPerPage')
+            if self.position['startPosition'] <= count:
+                self.position['startPosition'] += increment_number
+                yield scrapy.Request(
+                    url='https://www.centris.ca/Property/GetInscriptions',
+                    method='POST',
+                    body=json.dumps(self.position),
+                    headers={
+                        'Content-Type': 'application/json'
+                    },
+                    callback=self.parse_SingleFamilyHome,
+                    # dont_filter=True # ajout de l'option dont_filter pour ne pas filtrer les requêtes
+                )
+
+
+    def parse_listing(self, base_url, listing):
+        results = []
+        price = listing.xpath(".//div[@class='price']/span/text()").get()
+        price = price.strip()
+        category = listing.xpath(".//span[@itemprop='category']/div/text()").get()
+        category = category.strip()
+        address = listing.xpath(".//span[@class='address']/div/text()").getall()
+        url = listing.xpath(".//a[@class='a-more-detail']/@href").get()
+        url_en = listing.xpath(".//a[@class='a-more-detail']/@href").get()
+        url_fr = url.replace("/en", "/fr")
+        absolute_url = base_url[0] + url_en
+        absolute_url_fr = base_url[0] + url_fr
+
+        response = yield scrapy.Request(
+            url=absolute_url_fr,
+            callback=self.parse_summary,
+            meta={
+                'category': category,
+                'price': price,
+                'address': address,
+                'url': absolute_url_fr
+            },
+        )
+
+        results.append(response)
+        return results
 
 
     def parse_summary(self, response):
@@ -155,15 +190,16 @@ class Bot2Spider(scrapy.Spider):
         latitude = response.xpath("//meta[@itemprop='latitude']/@content").get()
         longitude = response.xpath("//meta[@itemprop='longitude']/@content").get()
         yield {
-            'id': self.annonce_count,
-            'category':"",
+            # 'id': self.annonce_count,
+            # 'category': "",
             'title': category,
             'price': price,
             'address': address,
             'latitude': latitude,
             'longitude': longitude,
             'url': url
-            }
+        }
+
 
     def closed(self, reason):
         self.driver.quit()
