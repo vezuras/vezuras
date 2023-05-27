@@ -31,7 +31,6 @@ class LESPACSpider(scrapy.Spider):
         "visitDate": 'null',
         "sortType": "recent"
     }
-    current_page = 1
 
     def start_requests(self):
         yield scrapy.Request(
@@ -56,23 +55,22 @@ class LESPACSpider(scrapy.Spider):
                         callback=self.parse_building
                     )
 
-        total_buildings = jsonresponse.get("total")
-        current_offset = self.query["offset"]
-        limit = self.query["limit"]
+            total_buildings = jsonresponse.get("total")
+            current_offset = self.query["offset"]
+            limit = self.query["limit"]
 
-        if current_offset + limit < total_buildings:
-            new_offset = current_offset + limit
-            self.query["offset"] = new_offset
-            self.current_page += 1
-            yield scrapy.Request(
-                url=self.start_url,
-                method='POST',
-                headers={
-                    'content-type': 'application/json;charset=UTF-8'
-                },
-                body=json.dumps(self.query),
-                callback=self.parse
-            )
+            if current_offset + limit < total_buildings:
+                new_offset = current_offset + limit
+                self.query["offset"] = new_offset
+                yield scrapy.Request(
+                    url=self.start_url,
+                    method='POST',
+                    headers={
+                        'content-type': 'application/json;charset=UTF-8'
+                    },
+                    body=json.dumps(self.query),
+                    callback=self.parse
+                )
 
     def parse_building(self, response):
         print(f'url: {response.url}')
@@ -95,14 +93,16 @@ class LESPACSpider(scrapy.Spider):
         extracted_data = self.extract_values(data)
 
         # Construction de l'URL de la page 'phones'
-        contact_id = extracted_data.get('contacts')[0].get('id')
-        phones_url = f'https://immoapi.lespac.com/v1/buildings/{public_id}/contacts/{contact_id}/phones'
-        print(f'Phones URL: {phones_url}')
-        yield scrapy.Request(
-            url=phones_url,
-            callback=self.parse_phones,
-            meta={'extracted_data': extracted_data}
-        )
+        contacts = extracted_data.get('contacts')
+        if contacts:
+            contact_id = contacts[0].get('id')
+            phones_url = f'https://immoapi.lespac.com/v1/buildings/{public_id}/contacts/{contact_id}/phones'
+            print(f'Phones URL: {phones_url}')
+            yield scrapy.Request(
+                url=phones_url,
+                callback=self.parse_phones,
+                meta={'extracted_data': extracted_data}
+            )
 
     def parse_phones(self, response):
         phones_data = json.loads(response.body)
