@@ -1,18 +1,17 @@
 import scrapy
 import json
-import re
 from urllib.parse import urljoin
+import re
 
 class PublimaisonSpider(scrapy.Spider):
     name = "publimaison"
     allowed_domains = ["publimaison.ca"]
     start_url = "https://www.publimaison.ca/fr/recherche/?hash=/show=recherche/regions=/villes=/type_propriete=6-1-3-5-4-7-2/categories=/prix_min=0/prix_max=0/caracteristiques=/chambres=0/salles_bain=0/etat=1/parution=4/construction=5/trier_par=3/nbr_item=20/page={}"
-    # custom_settings = {'CLOSESPIDER_PAGECOUNT': 2}
-    # custom_settings = {'CLOSESPIDER_ITEMCOUNT': 2}
-
+    custom_settings = {'CLOSESPIDER_ITEMCOUNT': 10}
     def __init__(self, *args, **kwargs):
         super(PublimaisonSpider, self).__init__(*args, **kwargs)
         self.visited_urls = set()
+        self.annonces = {}
 
     def start_requests(self):
         yield scrapy.Request(url=self.start_url.format(0), callback=self.parse)
@@ -41,27 +40,49 @@ class PublimaisonSpider(scrapy.Spider):
         cookie_publimaisonalertelang = response.headers.getlist('Set-Cookie')
         cookie_publimaisonalertelang = cookie_publimaisonalertelang[1].decode('utf-8') if len(cookie_publimaisonalertelang) > 1 else ''
         request_verification_token = response.xpath('//input[@name="__RequestVerificationToken"]/@value').get()
-        hashes = response.css('span.telephone::attr(data-url)').getall()
-
-        titre = response.xpath("//div[@class='titres']/h2/text()").get()
-        category = response.xpath("(//div[@class='one columns'])[1]/ul/li[2]/div/text()").get()
-        price = response.css('div.prix h3::text').get()
-        map_url = response.url + "/carte"
+        telephone_elements = response.xpath("//span[@class='telephone']")
 
         # Ajout des informations dans le dictionnaire de l'annonce
         annonce = {
             'url': response.url,
-            'titre': titre,
-            'category': category,
-            'price': price,
-            'telephone': []  # Initialisation de la liste de numéros de téléphone
+            'titre': response.xpath("//div[@class='titres']/h2/text()").get(),
+            'category': response.xpath("(//div[@class='one columns'])[1]/ul/li[2]/div/text()").get(),
+            'price': response.css('div.prix h3::text').get(),
+            'telephone': [],  # Initialisation de la liste de numéros de téléphone
+            'latitude': None,
+            'longitude': None
         }
 
         yield scrapy.Request(
-            url=map_url,
+            url=response.url + "/carte",
             callback=self.parse_map,
-            meta={'annonce': annonce, 'hashes': hashes}  # Passer l'annonce et les hashes en tant que méta-données
+            meta={'annonce': annonce, 'hashes': []}  # Passer l'annonce et les hashes vides en tant que méta-données
         )
+
+        for element in telephone_elements:
+            hash_value = element.xpath("./@data-url").get()
+
+            # Construire les données pour la requête AJAX
+            data = {
+                '__RequestVerificationToken': request_verification_token,
+                'hash': hash_value,
+            }
+
+            # Envoyer la requête AJAX avec les cookies inclus dans les headers
+            ajax_url = 'https://www.publimaison.ca/StatCounter/Telephone'
+            headers = {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',  # Ajouter l'en-tête Content-Type
+                'Cookie': f'{cookie_request_verification_token}; {cookie_publimaisonalertelang}'  # Inclure les cookies dans les headers de la requête
+            }
+            yield scrapy.FormRequest(
+                url=ajax_url,
+                method='POST',
+                formdata=data,
+                headers=headers,
+                callback=self.parse_telephones,
+                meta={'annonce': annonce}  # Passer uniquement l'annonce en tant que méta-donnée
+            )
 
     def parse_map(self, response):
         script = response.xpath("//script[contains(., 'markerClusterer=new MarkerClusterer')]").get()
@@ -80,6 +101,11 @@ class PublimaisonSpider(scrapy.Spider):
                 annonce = response.meta['annonce']
                 annonce['latitude'] = latitude
                 annonce['longitude'] = longitude
+
+                # Mettre à jour l'entrée existante dans le dictionnaire annonces
+                self.annonces[annonce['url']] = annonce
+
+                # Émettre l'annonce mise à jour
                 yield annonce
 
             else:
@@ -93,21 +119,7 @@ class PublimaisonSpider(scrapy.Spider):
             annonce = response.meta['annonce']
             annonce['telephone'].append(phone_number)
 
-        # Vérifier s'il reste d'autres hashes non traités
-        hashes = response.meta['hashes']
-        if hashes:
-            hash_value = hashes.pop(0)
-            data = {
-                '__RequestVerificationToken': response.meta['__RequestVerificationToken'],
-                'hash': hash_value
-            }
-            yield scrapy.FormRequest(
-                url='https://www.publimaison.ca/StatCounter/Telephone',
-                method='POST',
-                formdata=data,
-                headers={'X-Requested-With': 'XMLHttpRequest'},
-                callback=self.parse_telephones,
-                meta={'annonce': annonce, 'hashes': hashes}  # Passer l'annonce et les hashes en tant que méta-données
-            )
-        else:
-            yield annonce
+            # Mettre à jour l'entrée existante dans le dictionnaire annonces
+            self.annonces[annonce['url']] = annonce
+
+        # Pas besoin de yield annonce ici, car elle est déjà émise dans parse_summary
