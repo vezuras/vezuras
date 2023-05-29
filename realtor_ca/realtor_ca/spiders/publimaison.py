@@ -29,6 +29,8 @@ class PublimaisonSpider(scrapy.Spider):
         cookie_publimaisonalertelang = cookie_publimaisonalertelang[1].decode('utf-8') if len(cookie_publimaisonalertelang) > 1 else ''
         request_verification_token = response.xpath('//input[@name="__RequestVerificationToken"]/@value').get()
         hashes = response.css('span.telephone::attr(data-url)').getall()
+
+        titre = response.xpath("//div[@class='titres']/h2/text()").get()
         category = response.xpath("(//div[@class='one columns'])[1]/ul/li[2]/div/text()").get()
         price = response.css('div.prix h3::text').get()
         map_url = response.url + "/carte"
@@ -53,13 +55,13 @@ class PublimaisonSpider(scrapy.Spider):
                 formdata=data,
                 headers=headers,
                 callback=self.parse_telephones,
-                meta={'annonce': {'category': category, 'price': price}}
+                meta={'annonce': {'url': response.url, 'titre': titre, 'category': category, 'price': price}}
             )
 
         yield scrapy.Request(
             url=map_url,
             callback=self.parse_map,
-            meta={'annonce': {'category': category, 'price': price}}
+            meta={'annonce': {'url': response.url, 'titre': titre, 'category': category, 'price': price}}
         )
 
     def parse_map(self, response):
