@@ -22,29 +22,19 @@ class PublimaisonSpider(scrapy.Spider):
                 callback=self.parse_summary,
             )
 
-        next_page_url = response.xpath("//link[@rel='next']/@href").get()
-        absolute_next_page_url = urljoin(response.url, next_page_url)
-
-        if next_page_url:
-            yield scrapy.Request(
-                url=absolute_next_page_url,
-                callback=self.parse,
-            )
-
     def parse_summary(self, response):
         cookie_request_verification_token = response.headers.getlist('Set-Cookie')
         cookie_request_verification_token = cookie_request_verification_token[0].decode('utf-8') if cookie_request_verification_token else ''
         cookie_publimaisonalertelang = response.headers.getlist('Set-Cookie')
         cookie_publimaisonalertelang = cookie_publimaisonalertelang[1].decode('utf-8') if len(cookie_publimaisonalertelang) > 1 else ''
         request_verification_token = response.xpath('//input[@name="__RequestVerificationToken"]/@value').get()
-        hash_value = response.xpath("//span[@class='telephone']/@data-url").get()
+        hashes = response.css('span.telephone::attr(data-url)').getall()
         category = response.xpath("(//div[@class='one columns'])[1]/ul/li[2]/div/text()").get()
-        price = response.xpath("//div[@class='prix']/h3/text()").get()
+        price = response.css('div.prix h3::text').get()
         map_url = response.url + "/carte"
         # Construire les données pour la requête AJAX
         data = {
             '__RequestVerificationToken': request_verification_token,
-            'hash': hash_value,
         }
 
         # Envoyer la requête AJAX avec les cookies inclus dans les headers
@@ -54,24 +44,22 @@ class PublimaisonSpider(scrapy.Spider):
             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',  # Ajouter l'en-tête Content-Type
             'Cookie': f'{cookie_request_verification_token}; {cookie_publimaisonalertelang}'  # Inclure les cookies dans les headers de la requête
         }
-        yield scrapy.FormRequest(
-            url=ajax_url,
-            method='POST',
-            formdata=data,
-            headers=headers,
-            callback=self.parse_telephones
-        )
 
-        annonce = {
-            'category': category,
-            'price': price,
-            '__RequestVerificationToken': request_verification_token,
-        }
+        for hash_value in hashes:
+            data['hash'] = hash_value
+            yield scrapy.FormRequest(
+                url=ajax_url,
+                method='POST',
+                formdata=data,
+                headers=headers,
+                callback=self.parse_telephones,
+                meta={'annonce': {'category': category, 'price': price}}
+            )
 
         yield scrapy.Request(
             url=map_url,
             callback=self.parse_map,
-            meta={'annonce': annonce}
+            meta={'annonce': {'category': category, 'price': price}}
         )
 
     def parse_map(self, response):
@@ -91,29 +79,8 @@ class PublimaisonSpider(scrapy.Spider):
                 annonce = response.meta['annonce']
                 annonce['latitude'] = latitude
                 annonce['longitude'] = longitude
-
-                telephone = response.xpath("//span[@class='telephone']/@data-url")
-                if telephone:
-                    encoded_telephone = telephone.get()
-                    decoded_telephone = self.decode_telephone(encoded_telephone)
-                    annonce['telephone'] = decoded_telephone
-                    
-                    # Envoyer une requête AJAX pour obtenir le numéro de téléphone
-                    phone_url = 'https://www.publimaison.ca/StatCounter/Telephone'
-                    form_data = {
-                        '__RequestVerificationToken': annonce['__RequestVerificationToken'],
-                        'hash': decoded_telephone,
-                    }
-                    yield scrapy.FormRequest(
-                        url=phone_url,
-                        formdata=form_data,
-                        callback=self.parse_telephone_response,
-                        meta={'annonce': annonce}
-                    )
-                else:
-                    annonce['telephone'] = None
-
                 yield annonce
+
             else:
                 self.logger.info("Impossible d'extraire la latitude et la longitude")
 
@@ -122,6 +89,6 @@ class PublimaisonSpider(scrapy.Spider):
         phone_number = data.get("value")
         
         if phone_number:
-            print("Phone number:", phone_number)
-        else:
-            print("No phone number found")
+            annonce = response.meta['annonce']
+            annonce['telephone'] = phone_number
+            yield annonce
