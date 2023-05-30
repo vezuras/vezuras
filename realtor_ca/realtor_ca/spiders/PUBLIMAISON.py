@@ -12,7 +12,7 @@ class PublimaisonSpider(scrapy.Spider):
     def __init__(self, *args, **kwargs):
         super(PublimaisonSpider, self).__init__(*args, **kwargs)
         self.visited_urls = set()
-        self.annonces = {}
+        self.annonces = []
 
     def start_requests(self):
         yield scrapy.Request(url=self.start_url.format(0), callback=self.parse)
@@ -42,44 +42,56 @@ class PublimaisonSpider(scrapy.Spider):
         request_verification_token = response.xpath('//input[@name="__RequestVerificationToken"]/@value').get()
         telephone_elements = response.xpath("//span[@class='telephone']")
 
-        annonce = {
-            'url': response.url,
-            'titre': response.xpath("//div[@class='titres']/h2/text()").get(),
-            'category': response.xpath("(//div[@class='one columns'])[1]/ul/li[2]/div/text()").get(),
-            'price': response.css('div.prix h3::text').get(),
-            'telephone': [],
-            'latitude': None,
-            'longitude': None
-        }
+        titre = response.css('div.titres h3::text').get()
+        street_address, unity, locality, region, postal_code, mls = self.extract_address_info(titre)
 
-        yield scrapy.Request(
-            url=response.url + "/carte",
-            callback=self.parse_map,
-            meta={'annonce': annonce, 'hashes': []}
-        )
-
-        for element in telephone_elements:
-            hash_value = element.xpath("./@data-url").get()
-
-            data = {
-                '__RequestVerificationToken': request_verification_token,
-                'hash': hash_value,
+        if titre:  # Vérifier si le titre existe
+            annonce = {
+                'url': response.url,
+                'titre': titre,
+                'category': response.css('div.one.columns ul li:nth-child(2) div::text').get(),
+                'price': response.css('div.prix h3::text').get(),
+                'telephone': [],
+                'address': {
+                    'street_address': street_address,
+                    'unity': unity,
+                    'locality': locality,
+                    'region': region,
+                    'postal_code': postal_code,
+                    'latitude': None,
+                    'longitude': None,
+                    'mls': mls
+                }
             }
 
-            ajax_url = 'https://www.publimaison.ca/StatCounter/Telephone'
-            headers = {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'Cookie': f'{cookie_request_verification_token}; {cookie_publimaisonalertelang}'
-            }
-            yield scrapy.FormRequest(
-                url=ajax_url,
-                method='POST',
-                formdata=data,
-                headers=headers,
-                callback=self.parse_telephones,
-                meta={'annonce': annonce}
+            yield scrapy.Request(
+                url=response.url + "/carte",
+                callback=self.parse_map,
+                meta={'annonce': annonce, 'hashes': []}
             )
+
+            for element in telephone_elements:
+                hash_value = element.xpath("./@data-url").get()
+
+                data = {
+                    '__RequestVerificationToken': request_verification_token,
+                    'hash': hash_value,
+                }
+
+                ajax_url = 'https://www.publimaison.ca/StatCounter/Telephone'
+                headers = {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'Cookie': f'{cookie_request_verification_token}; {cookie_publimaisonalertelang}'
+                }
+                yield scrapy.FormRequest(
+                    url=ajax_url,
+                    method='POST',
+                    formdata=data,
+                    headers=headers,
+                    callback=self.parse_telephones,
+                    meta={'annonce': annonce}
+                )
 
     def parse_map(self, response):
         script = response.xpath("//script[contains(., 'markerClusterer=new MarkerClusterer')]").get()
@@ -96,10 +108,10 @@ class PublimaisonSpider(scrapy.Spider):
                 self.logger.info("Latitude: %s, Longitude: %s", latitude, longitude)
 
                 annonce = response.meta['annonce']
-                annonce['latitude'] = latitude
-                annonce['longitude'] = longitude
+                annonce['address']['latitude'] = latitude
+                annonce['address']['longitude'] = longitude
 
-                self.annonces[annonce['url']] = annonce
+                self.annonces.append(annonce)
                 yield annonce
 
             else:
@@ -113,4 +125,37 @@ class PublimaisonSpider(scrapy.Spider):
             annonce = response.meta['annonce']
             annonce['telephone'].append(phone_number)
 
-            self.annonces[annonce['url']] = annonce
+            self.annonces.append(annonce)
+
+    def extract_address_info(self, titre):
+        address_match = re.search(r'^(.*?)\s*,\s*(.*?)\s+\((.*?)\)\s+(.*?)\s+\(No.\s+MLS\s+(\d+)\)', titre)
+        street_address = address_match.group(1).strip() if address_match else ''
+        unity_list = []  # Création d'une liste pour stocker les numéros d'unité
+
+        if 'App.' in titre:
+            unity_matches = re.findall(r'App\.(\d+)', titre)
+            unity_range_matches = re.findall(r'App\.(\d+)-(\d+)', titre)
+
+            if unity_matches:
+                unity_list.extend(unity_matches)  # Ajouter les numéros d'unité individuels à la liste
+            if unity_range_matches:
+                # Ajouter les numéros d'unité des plages à la liste
+                unity_list.extend(f"{range_start}-{range_end}" for range_start, range_end in unity_range_matches)
+
+            street_address = re.sub(r'App\.\d+(-\d+)?', '', street_address).strip()
+
+        # Supprimer le texte 'App.' de la valeur street_address
+        street_address = re.sub(r'\bApp\.\d+\b', '', street_address).strip()
+
+        locality = address_match.group(2).strip() if address_match else ''
+        region = address_match.group(3).strip() if address_match else ''
+        postal_code = address_match.group(4).strip() if address_match else ''
+        mls = address_match.group(5).strip() if address_match else ''
+
+        return street_address, unity_list, locality, region, postal_code, mls
+
+
+
+
+
+
