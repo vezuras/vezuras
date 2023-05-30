@@ -7,7 +7,7 @@ class PublimaisonSpider(scrapy.Spider):
     name = "publimaison"
     allowed_domains = ["publimaison.ca"]
     start_url = "https://www.publimaison.ca/fr/recherche/?hash=/show=recherche/regions=/villes=/type_propriete=6-1-3-5-4-7-2/categories=/prix_min=0/prix_max=0/caracteristiques=/chambres=0/salles_bain=0/etat=1/parution=4/construction=5/trier_par=3/nbr_item=20/page={}"
-    custom_settings = {'CLOSESPIDER_ITEMCOUNT': 10}
+    custom_settings = {'CLOSESPIDER_ITEMCOUNT': 200}
 
     def __init__(self, *args, **kwargs):
         super(PublimaisonSpider, self).__init__(*args, **kwargs)
@@ -131,6 +131,10 @@ class PublimaisonSpider(scrapy.Spider):
         address_match = re.search(r'^(.*?)\s*,\s*(.*?)\s+\((.*?)\)\s+(.*?)\s+\(No.\s+MLS\s+(\d+)\)', titre)
         street_address = address_match.group(1).strip() if address_match else ''
         unity_list = []  # Création d'une liste pour stocker les numéros d'unité
+        locality = address_match.group(2).strip() if address_match else ''
+        region = address_match.group(3).strip() if address_match else ''
+        postal_code = address_match.group(4).strip() if address_match else ''
+        mls = address_match.group(5).strip() if address_match else ''
 
         if 'App.' in titre:
             unity_matches = re.findall(r'App\.(\d+)', titre)
@@ -145,12 +149,26 @@ class PublimaisonSpider(scrapy.Spider):
 
             street_address = re.sub(r'App\.\d+(-\d+)?', '', street_address).strip()
 
+        elif 'app. ' in titre:
+            unity_matches = re.findall(r'app\. ([a-zA-Z\d]+)', titre)
+            unity_range_matches = re.findall(r'app\. ([a-zA-Z\d]+)-([a-zA-Z\d]+)', titre)
+
+            if unity_matches:
+                unity_list.extend(unity_match for unity_match in unity_matches)  # Ajouter les numéros d'unité individuels à la liste
+            if unity_range_matches:
+                # Ajouter les numéros d'unité des plages à la liste
+                for range_start, range_end in unity_range_matches:
+                    unity_list.extend(chr(code) for code in range(ord(range_start), ord(range_end) + 1))
+
+            street_address = re.sub(r'app\. [a-zA-Z\d]+(-[a-zA-Z\d]+)?', '', street_address).strip()
+
+        # Mettre à jour les valeurs uniquement si elles sont vides
+        if not street_address:
+            street_address = address_match.group(1).strip() if address_match else ''
+        if not postal_code:
+            postal_code = address_match.group(4).strip() if address_match else ''
+
         # Supprimer le texte 'App.' de la valeur street_address
         street_address = re.sub(r'\bApp\.\d+\b', '', street_address).strip()
-
-        locality = address_match.group(2).strip() if address_match else ''
-        region = address_match.group(3).strip() if address_match else ''
-        postal_code = address_match.group(4).strip() if address_match else ''
-        mls = address_match.group(5).strip() if address_match else ''
 
         return street_address, list(set(unity_list)), locality, region, postal_code, mls
