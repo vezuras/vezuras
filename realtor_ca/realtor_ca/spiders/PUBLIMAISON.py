@@ -137,10 +137,11 @@ class PublimaisonSpider(scrapy.Spider):
             unity_range_matches = re.findall(r'App\.(\d+)-(\d+)', titre)
 
             if unity_matches:
-                unity_list.extend(unity_matches)  # Ajouter les numéros d'unité individuels à la liste
+                unity_list.extend(int(unity) for unity in unity_matches)  # Ajouter les numéros d'unité individuels à la liste
             if unity_range_matches:
                 # Ajouter les numéros d'unité des plages à la liste
-                unity_list.extend(f"{range_start}-{range_end}" for range_start, range_end in unity_range_matches)
+                for range_start, range_end in unity_range_matches:
+                    unity_list.extend(range(int(range_start), int(range_end) + 1))
 
             street_address = re.sub(r'App\.\d+(-\d+)?', '', street_address).strip()
 
@@ -152,10 +153,4 @@ class PublimaisonSpider(scrapy.Spider):
         postal_code = address_match.group(4).strip() if address_match else ''
         mls = address_match.group(5).strip() if address_match else ''
 
-        return street_address, unity_list, locality, region, postal_code, mls
-
-
-
-
-
-
+        return street_address, list(set(unity_list)), locality, region, postal_code, mls
