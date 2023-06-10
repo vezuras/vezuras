@@ -4,7 +4,6 @@ import json
 class LESPACSpider(scrapy.Spider):
     name = 'lespac'
     start_url = 'https://immoapi.lespac.com/v1/buildings/list'
-    DOWNLOAD_DELAY = 2  # Nouvelle valeur pour DOWNLOAD_DELAY spécifique à ce spider
 
     query = {
         "adType":0,
