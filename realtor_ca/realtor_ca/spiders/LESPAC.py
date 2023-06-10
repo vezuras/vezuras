@@ -2,35 +2,37 @@ import scrapy
 import json
 
 class LESPACSpider(scrapy.Spider):
-    name = 'LESPAC'
+    name = 'lespac'
     start_url = 'https://immoapi.lespac.com/v1/buildings/list'
+    DOWNLOAD_DELAY = 2  # Nouvelle valeur pour DOWNLOAD_DELAY spécifique à ce spider
+
     query = {
-        "adType": 0,
-        "advertiserType": 0,
-        "bathRooms": 0,
-        "bedRooms": 0,
-        "constructionType": 0,
-        "listingBuildingTypeIds": [0],
-        "listingCategoryId": 0,
-        "listingFeatureIds": [],
-        "listingFurnitureIds": [],
-        "listingTagIds": [],
-        "listingTypeIds": [],
-        "maximumPrice": -1,
-        "maximumYear": -1,
-        "minimumPrice": 0,
-        "minimumYear": 0,
-        "operationType": 0,
-        "petsAllowed": False,
-        "publishedSince": 0,
-        "rooms": 0,
-        "sellerType": 0,
-        "description": True,
-        "offset": 0,
-        "limit": 20,
-        "visitDate": 'null',
-        "sortType": "recent"
-    }
+        "adType":0,
+        "advertiserType":0,
+        "bathRooms":0,
+        "bedRooms":0,
+        "constructionType":0,
+        "listingBuildingTypeIds":[0],
+        "listingCategoryId":0,
+        "listingFeatureIds":[],
+        "listingFurnitureIds":[],
+        "listingTagIds":[],
+        "listingTypeIds":[],
+        "maximumPrice":-1,
+        "maximumYear":-1,
+        "minimumPrice":0,
+        "minimumYear":0,
+        "operationType":0,
+        "petsAllowed":"false",
+        "publishedSince":0,
+        "rooms":0,
+        "sellerType":0,
+        "description":"true",
+        "offset":0,
+        "limit":20,
+        "visitDate":"null",
+        "sortType":"recent"
+        }
 
     def start_requests(self):
         yield scrapy.Request(
