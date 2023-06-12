@@ -5,33 +5,7 @@ class LESPACSpider(scrapy.Spider):
     name = 'lespac'
     start_url = 'https://immoapi.lespac.com/v1/buildings/list'
 
-    query = {
-        "adType":0,
-        "advertiserType":0,
-        "bathRooms":0,
-        "bedRooms":0,
-        "constructionType":0,
-        "listingBuildingTypeIds":[0],
-        "listingCategoryId":0,
-        "listingFeatureIds":[],
-        "listingFurnitureIds":[],
-        "listingTagIds":[],
-        "listingTypeIds":[],
-        "maximumPrice":-1,
-        "maximumYear":-1,
-        "minimumPrice":0,
-        "minimumYear":0,
-        "operationType":0,
-        "petsAllowed":"false",
-        "publishedSince":0,
-        "rooms":0,
-        "sellerType":0,
-        "description":"true",
-        "offset":0,
-        "limit":20,
-        "visitDate":"null",
-        "sortType":"recent"
-        }
+    query = {"adType":0,"advertiserType":0,"bathRooms":0,"bedRooms":0,"constructionType":0,"listingBuildingTypeIds":[0],"listingCategoryId":0,"listingFeatureIds":[],"listingFurnitureIds":[],"listingTagIds":[],"listingTypeIds":[],"maximumPrice":-1,"maximumYear":-1,"minimumPrice":0,"minimumYear":0,"operationType":0,"petsAllowed":False,"publishedSince":0,"rooms":0,"sellerType":0,"description":True,"offset":0,"limit":20,"visitDate":'null',"sortType":"recent"}
 
     def start_requests(self):
         yield scrapy.Request(
@@ -88,6 +62,7 @@ class LESPACSpider(scrapy.Spider):
 
     def parse_detail(self, response):
         public_id = response.meta.get('public_id')
+        detail_url = response.url  # URL de la page de détail
         print(f'Phones URL: {response.url}')
 
         data = json.loads(response.body)
@@ -99,6 +74,7 @@ class LESPACSpider(scrapy.Spider):
             contact_id = contacts[0].get('id')
             phones_url = f'https://immoapi.lespac.com/v1/buildings/{public_id}/contacts/{contact_id}/phones'
             print(f'Phones URL: {phones_url}')
+            extracted_data['url'] = detail_url  # Ajouter la clé "url" avec la valeur "detail_url" dans extracted_data
             yield scrapy.Request(
                 url=phones_url,
                 callback=self.parse_phones,
