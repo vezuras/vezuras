@@ -1,12 +1,11 @@
 import scrapy
 import json
-import csv
 from datetime import datetime
 
 class LOGISQCSpider(scrapy.Spider):
-    name = 'LOGIQC'
+    name = 'logisqc'
     start_url = 'https://www.logisquebec.com/a-vendre/{}'
-    # custom_settings = {'CLOSESPIDER_PAGECOUNT': 10}
+    custom_settings = {'CLOSESPIDER_ITEMCOUNT': 100}
 
     def __init__(self, *args, **kwargs):
         super(LOGISQCSpider, self).__init__(*args, **kwargs)
@@ -44,7 +43,6 @@ class LOGISQCSpider(scrapy.Spider):
         script_content_2 = response.xpath("//script[contains(text(), 'Product')]/text()").get()
         data_2 = json.loads(script_content_2) if script_content_2 else {}
 
-        number_of_rooms = data_1.get('numberOfRooms')
         address = data_1.get('address', {})
         street_address = address.get('streetAddress')
         locality = address.get('addressLocality')
@@ -52,37 +50,43 @@ class LOGISQCSpider(scrapy.Spider):
         geo = data_1.get('geo', {})
         latitude = geo.get('latitude')
         longitude = geo.get('longitude')
-        telephone = data_1.get('telephone')
+        phones = data_1.get('telephone')
+        phones = [phones] if phones else []  # Convertir en liste si non vide, sinon créer une liste vide
+
         url = data_1.get('url')
 
         description = data_2.get('description')
-        image = data_2.get('image')
         offers = data_2.get('offers', {})
         price = offers.get('price')
-        price_currency = offers.get('priceCurrency')
         url = offers.get('url')
         sku = data_2.get('sku')
-        source = 'LogisQc'
+
+        # Normalize price
+        price = self.normalize_price(price)
 
         annonce = {
-            'source': source,
             'date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'source': self.name,
             'category': category,
-            'number_of_rooms': number_of_rooms,
+            'price': price,
             'address': {
                 'street_address': street_address,
                 'locality': locality,
                 'postal_code': postal_code,
-                'latitude': latitude,
-                'longitude': longitude
             },
-            'telephone': telephone,
-            'url': url,
+            'latitude': latitude,
+            'longitude': longitude,
+            'phone': phones,
             'description': description,
-            'image': image,
-            'price': price,
-            'price_currency': price_currency,
-            'sku': source + '-' + sku
+            'url': url,
+            'sku': f"{self.name}-{sku}",
         }
 
         yield annonce
+
+    def normalize_price(self, price):
+        numeric_part = ''.join(filter(str.isdigit, price))
+        formatted_price = '{:,}'.format(int(numeric_part))
+        formatted_price = formatted_price.replace(',', ' ')
+        formatted_price += ' $'
+        return formatted_price
