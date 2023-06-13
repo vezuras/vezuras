@@ -1,19 +1,22 @@
 import scrapy
+import json
 from bs4 import BeautifulSoup
+from datetime import datetime
+import re
 
-class KIJIJISpider(scrapy.Spider):
-    name = 'KIJIJI'
-    start_urls = ['https://www.kijiji.ca/b-a-vendre/quebec/page-{}/c30353001l9001']
+class KijijiSpider(scrapy.Spider):
+    name = 'kijiji'
+    start_urls = ['https://www.kijiji.ca/b-a-vendre/quebec/c30353001l9001?ad=offering']
     # custom_settings = {'CLOSESPIDER_PAGECOUNT': 200}
 
     def __init__(self, *args, **kwargs):
-        super(KIJIJISpider, self).__init__(*args, **kwargs)
+        super(KijijiSpider, self).__init__(*args, **kwargs)
         self.data = []
         self.items_processed = 0
 
     def start_requests(self):
         page_number = 1
-        yield scrapy.Request(url=self.start_urls[0].format(page_number), callback=self.parse, meta={'page_number': page_number})
+        yield scrapy.Request(url=self.start_urls[0], callback=self.parse, meta={'page_number': page_number})
 
     def parse(self, response):
         page_number = response.meta['page_number']
@@ -29,12 +32,9 @@ class KIJIJISpider(scrapy.Spider):
         yield scrapy.Request(url=next_page_url, callback=self.parse, meta={'page_number': next_page_number})
 
     def parse_summary_page(self, response):
+        extracted_data = {}
         soup = BeautifulSoup(response.body, 'html.parser')
         meta_elements = soup.find_all('meta')
-        addresses = response.xpath("//span[@itemprop='address']/text()").get()
-        price = response.xpath("//span[@class='currentPrice-2842943473']/span/text()").get()
-        extracted_data = {}
-
         for meta_element in meta_elements:
             property_name = meta_element.get('property')
             content = meta_element.get('content')
@@ -43,13 +43,43 @@ class KIJIJISpider(scrapy.Spider):
                     property_name = property_name[3:]
                 extracted_data[property_name] = content
 
-        extracted_data['address'] = addresses
-        extracted_data['price'] = price
+        addresses = response.xpath("//span[@itemprop='address']/text()").get()
+        price = response.xpath("//span[@class='currentPrice-2842943473']/span/text()").get()
+        sku = response.xpath("//a[@class='adId-4111206830']/text()").get()
+        description = extracted_data['description']
+        locality = extracted_data['locality']
+        region = extracted_data['region']
+        latitude = extracted_data['latitude']
+        longitude = extracted_data['longitude']
+        title = response.xpath("(//span[@itemprop='name'])[4]/text()").get()
+        category_match = re.search(r'(.+)(?: à vendre| for sale)', title)
+        category = category_match.group(1) if category_match else ''
+        extracted_data = {
+            'date': datetime.now().strftime("%Y-%m-%d"),
+            'source': self.name,
+            'category': category,  # Ajoutez la catégorie appropriée ici
+            'prix': price,
+            'full_address': addresses,  # Ajoutez l'adresse complète ici
+            'address': {
+                'postal_code': '',  # Assignez le code postal extrait ici
+                'locality': locality,  # Assignez la localité extraite ici
+                'region': region,  # Assignez la région extraite ici
+            },
+            'latitude': latitude,  # Ajoutez la latitude appropriée ici
+            'longitude': longitude,  # Ajoutez la longitude appropriée ici
+            'description': description,  # Ajoutez la description appropriée ici
+            'url': response.url,
+            'sku': f"{self.name}-{sku}",
+            'telephone': [],  # Ajoutez la liste des numéros de téléphone vides ici
+        }
 
-        if extracted_data.get('title') and extracted_data.get('description'):
-            yield extracted_data
-        else:
-            self.logger.warning(f"Invalid data on page: {response.url}")
+        # Extraction du code postal de l'adresse
+        postal_code_match = re.search(r'\b[A-Za-z]\d[A-Za-z] \d[A-Za-z]\d\b|\b[A-Za-z]\d[A-Za-z]\d[A-Za-z]\d\b', addresses)
+        if postal_code_match:
+            postal_code = postal_code_match.group()
+            extracted_data['address']['postal_code'] = postal_code
+
+        yield extracted_data
 
         self.items_processed += 1
 
