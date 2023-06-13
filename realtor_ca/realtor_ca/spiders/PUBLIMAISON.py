@@ -2,12 +2,13 @@ import scrapy
 import json
 from urllib.parse import urljoin
 import re
+from datetime import datetime
 
 class PublimaisonSpider(scrapy.Spider):
     name = "publimaison"
     allowed_domains = ["publimaison.ca"]
     start_url = "https://www.publimaison.ca/fr/recherche/?hash=/show=recherche/regions=/villes=/type_propriete=6-1-3-5-4-7-2/categories=/prix_min=0/prix_max=0/caracteristiques=/chambres=0/salles_bain=0/etat=1/parution=4/construction=5/trier_par=3/nbr_item=20/page={}"
-    custom_settings = {'CLOSESPIDER_ITEMCOUNT': 50}
+    # custom_settings = {'CLOSESPIDER_ITEMCOUNT': 50}
 
     def __init__(self, *args, **kwargs):
         super(PublimaisonSpider, self).__init__(*args, **kwargs)
@@ -41,26 +42,31 @@ class PublimaisonSpider(scrapy.Spider):
         cookie_publimaisonalertelang = cookie_publimaisonalertelang[1].decode('utf-8') if len(cookie_publimaisonalertelang) > 1 else ''
         request_verification_token = response.xpath('//input[@name="__RequestVerificationToken"]/@value').get()
         telephone_elements = response.xpath("//span[@class='telephone']")
-
         titre = response.css('div.titres h3::text').get()
+        description = response.css('div.fiche-description.open p::text').get()
+        sku_match = re.search(r'/annonce/(\d+)/', response.url)
+        sku = sku_match.group(1) if sku_match else ""
+
         if titre:  # Vérifier si le titre existe
             street_address, unity, locality, region, postal_code, mls = self.extract_address_info(titre)
             annonce = {
-                'url': response.url,
-                'titre': titre,
+                'date': datetime.now().strftime("%Y-%m-%d"),
+                'source': self.name,
                 'category': response.css('div.one.columns ul li:nth-child(2) div::text').get(),
                 'price': response.css('div.prix h3::text').get(),
-                'telephone': [],
                 'address': {
                     'street_address': street_address,
                     'unity': unity,
                     'locality': locality,
                     'region': region,
                     'postal_code': postal_code,
-                    'latitude': None,
-                    'longitude': None,
-                    'mls': mls
-                }
+                },
+                'latitude': '',
+                'longitude': '',
+                'description': self.clean_description(description),
+                'url': response.url,
+                'sku': f"{self.name}-{sku}",
+                'telephone': [],
             }
 
             yield scrapy.Request(
@@ -92,7 +98,6 @@ class PublimaisonSpider(scrapy.Spider):
                     meta={'annonce': annonce}
                 )
 
-
     def parse_map(self, response):
         script = response.xpath("//script[contains(., 'markerClusterer=new MarkerClusterer')]").get()
 
@@ -108,8 +113,8 @@ class PublimaisonSpider(scrapy.Spider):
                 self.logger.info("Latitude: %s, Longitude: %s", latitude, longitude)
 
                 annonce = response.meta['annonce']
-                annonce['address']['latitude'] = latitude
-                annonce['address']['longitude'] = longitude
+                annonce['latitude'] = latitude
+                annonce['longitude'] = longitude
 
                 self.annonces.append(annonce)
                 yield annonce
@@ -173,4 +178,8 @@ class PublimaisonSpider(scrapy.Spider):
 
         return street_address, unity, locality, region, postal_code, mls
 
+    def clean_description(self, description):
+        if description:
+            return description.lstrip().replace('\r', '').replace('\n', '')
+        return ''
 
