@@ -88,10 +88,9 @@ class LespacSpider(scrapy.Spider):
     def parse_detail(self, response):
         public_id = response.meta.get('public_id')
         data = json.loads(response.body)
-        source = 'lespac'
         extracted_data = {
-            'source': source,
             'date': datetime.now().strftime("%Y-%m-%d"),
+            'source': self.name,
             'category': data.get('listingCategory', {}).get('name'),
             'prix': data.get('price'),
             'address': {
@@ -100,12 +99,12 @@ class LespacSpider(scrapy.Spider):
                 'region': data.get('city', {}).get('region'),
                 'postal_code': data.get('zipCode'),
             },
-            'description': unescape(data.get('description', '')).replace('\r', '').replace('\n', ''),  # Nettoyer la description et supprimer les caractères de retour à la ligne
             'latitude': data.get('latitude'),
             'longitude': data.get('longitude'),
+            'description': unescape(data.get('description', '')).replace('\r', '').replace('\n', ''),  # Nettoyer la description et supprimer les caractères de retour à la ligne
             'url': data.get('detailUrl'),
             'detailUrl': response.url,
-            'sku': f"{source}-{public_id}"
+            'sku': f"{self.name}-{public_id}"
         }
 
         # Construction de l'URL de la page 'phones'
