@@ -3,6 +3,8 @@ import json
 from bs4 import BeautifulSoup
 from datetime import datetime
 import re
+from urllib.parse import urljoin
+
 
 class KijijiSpider(scrapy.Spider):
     name = 'kijiji'
@@ -28,7 +30,7 @@ class KijijiSpider(scrapy.Spider):
 
         # Pagination
         next_page_number = page_number + 1
-        next_page_url = self.start_urls[0].format(next_page_number)
+        next_page_url = urljoin(self.start_urls[0], f'page-{next_page_number}/c30353001l9001')
         yield scrapy.Request(url=next_page_url, callback=self.parse, meta={'page_number': next_page_number})
 
     def parse_summary_page(self, response):
@@ -55,10 +57,10 @@ class KijijiSpider(scrapy.Spider):
         category_match = re.search(r'(.+)(?: à vendre| for sale)', title)
         category = category_match.group(1) if category_match else ''
         extracted_data = {
-            'date': datetime.now().strftime("%Y-%m-%d"),
+            'date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             'source': self.name,
             'category': category,  # Ajoutez la catégorie appropriée ici
-            'prix': price,
+            'price': price,
             'full_address': addresses,  # Ajoutez l'adresse complète ici
             'address': {
                 'postal_code': '',  # Assignez le code postal extrait ici
@@ -67,10 +69,10 @@ class KijijiSpider(scrapy.Spider):
             },
             'latitude': latitude,  # Ajoutez la latitude appropriée ici
             'longitude': longitude,  # Ajoutez la longitude appropriée ici
+            'phone': [],  # Ajoutez la liste des numéros de téléphone vides ici
             'description': description,  # Ajoutez la description appropriée ici
             'url': response.url,
             'sku': f"{self.name}-{sku}",
-            'telephone': [],  # Ajoutez la liste des numéros de téléphone vides ici
         }
 
         # Extraction du code postal de l'adresse
