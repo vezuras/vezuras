@@ -8,7 +8,6 @@ class PublimaisonSpider(scrapy.Spider):
     name = "publimaison"
     allowed_domains = ["publimaison.ca"]
     start_url = "https://www.publimaison.ca/fr/recherche/?hash=/show=recherche/regions=/villes=/type_propriete=6-1-3-5-4-7-2/categories=/prix_min=0/prix_max=0/caracteristiques=/chambres=0/salles_bain=0/etat=1/parution=4/construction=5/trier_par=3/nbr_item=20/page={}"
-    # custom_settings = {'CLOSESPIDER_ITEMCOUNT': 50}
 
     def __init__(self, *args, **kwargs):
         super(PublimaisonSpider, self).__init__(*args, **kwargs)
@@ -50,7 +49,7 @@ class PublimaisonSpider(scrapy.Spider):
         if titre:  # Vérifier si le titre existe
             street_address, unity, locality, region, postal_code, mls = self.extract_address_info(titre)
             annonce = {
-                'date': datetime.now().strftime("%Y-%m-%d"),
+                'date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 'source': self.name,
                 'category': response.css('div.one.columns ul li:nth-child(2) div::text').get(),
                 'price': response.css('div.prix h3::text').get(),
@@ -63,10 +62,10 @@ class PublimaisonSpider(scrapy.Spider):
                 },
                 'latitude': '',
                 'longitude': '',
+                'phone': [],
                 'description': self.clean_description(description),
                 'url': response.url,
                 'sku': f"{self.name}-{sku}",
-                'telephone': [],
             }
 
             yield scrapy.Request(
@@ -127,8 +126,9 @@ class PublimaisonSpider(scrapy.Spider):
         phone_number = data.get("value")
 
         if phone_number:
+            formatted_phone = self.format_phone_number(phone_number)
             annonce = response.meta['annonce']
-            annonce['telephone'].append(phone_number)
+            annonce['phone'].append(formatted_phone)
 
             self.annonces.append(annonce)
 
@@ -179,7 +179,18 @@ class PublimaisonSpider(scrapy.Spider):
         return street_address, unity, locality, region, postal_code, mls
 
     def clean_description(self, description):
-        if description:
-            return description.lstrip().replace('\r', '').replace('\n', '')
-        return ''
+            if description:
+                cleaned_description = description.strip()
+                cleaned_description = re.sub(r'\s+', ' ', cleaned_description)
+                return cleaned_description
+            else:
+                return ""
+    
+    def format_phone_number(self, phone_number):
+        formatted_number = re.sub(r'\D', '', phone_number)
+        if len(formatted_number) == 10:
+            formatted_number = f"{formatted_number[:3]}-{formatted_number[3:6]}-{formatted_number[6:]}"
+        elif len(formatted_number) == 20:
+            formatted_number = f"{formatted_number[1:4]}-{formatted_number[6:9]}-{formatted_number[13:16]}-{formatted_number[17:]}"
+        return formatted_number
 
