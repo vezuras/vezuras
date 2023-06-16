@@ -126,9 +126,9 @@ class PublimaisonSpider(scrapy.Spider):
         phone_number = data.get("value")
 
         if phone_number:
-            formatted_phone = self.format_phone_number(phone_number)
+            formatted_phone = self.extract_phone_number(phone_number)
             annonce = response.meta['annonce']
-            annonce['phone'].append(formatted_phone)
+            annonce['phone'] = formatted_phone
 
             self.annonces.append(annonce)
 
@@ -186,11 +186,8 @@ class PublimaisonSpider(scrapy.Spider):
             else:
                 return ""
     
-    def format_phone_number(self, phone_number):
-        formatted_number = re.sub(r'\D', '', phone_number)
-        if len(formatted_number) == 10:
-            formatted_number = f"{formatted_number[:3]}-{formatted_number[3:6]}-{formatted_number[6:]}"
-        elif len(formatted_number) == 20:
-            formatted_number = f"{formatted_number[1:4]}-{formatted_number[6:9]}-{formatted_number[13:16]}-{formatted_number[17:]}"
-        return formatted_number
+    def extract_phone_number(self, phone_number):
+        phone_number = re.findall(r'\(\d{3}\) \d{3}-\d{4}', phone_number)
+        return phone_number
+
 
