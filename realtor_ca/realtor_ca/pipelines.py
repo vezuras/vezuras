@@ -22,9 +22,10 @@ class JsonWriterPipeline:
             self.file_name_avpp = f'avpp_{self.start_time.strftime("%Y-%m-%d")}.json'
         else:
             self.file_name_avpp = None
-
+            self.file_name = f'centris_{self.start_time.strftime("%Y-%m-%d")}.json'
+        
         self.file_name_centris = f'centris_{self.start_time.strftime("%Y-%m-%d")}.json'
-
+        
         self.load_data()
 
         atexit.register(self.close_json)
