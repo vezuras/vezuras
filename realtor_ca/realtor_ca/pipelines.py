@@ -229,21 +229,15 @@ class MongoDBPipeline:
         adapter = ItemAdapter(item)
         item_data = adapter.asdict()
 
-        if self.spider_name not in self.items:
-            self.items[self.spider_name] = []
-
         if not self.is_duplicate(item_data):
             if not self.is_centris_duplicate(item_data):
                 if 'phone' in item_data:
                     item_data['phone'] = self.format_phone(item_data['phone'])
                 if 'price' in item_data:
                     item_data['price'] = PriceFormatter.normalize_price(item_data['price'])
-                self.items[self.spider_name].append(item_data)
+                self.items.setdefault(self.spider_name, []).append(item_data)
                 if self.spider_name == "centris":
                     self.centris_items.setdefault(self.spider_name, []).append(item_data)  # Ajoutez également l'annonce à self.centris_items
-
-        # Ajoutez l'annonce au fichier distinct du spider
-        self.items.setdefault(self.spider_name, []).append(item_data)
 
         return item
 
@@ -288,16 +282,22 @@ class MongoDBPipeline:
     @staticmethod
     def normalize_price(price):
         numeric_part = ''.join(filter(str.isdigit, price))
-        formatted_price = '{:,}'.format(int(numeric_part))
-        formatted_price = formatted_price.replace(',', ' ')
-        formatted_price += ' $'
-        return formatted_price
+        if numeric_part:
+            formatted_price = '{:,}'.format(int(numeric_part))
+            formatted_price = formatted_price.replace(',', ' ')
+            formatted_price += ' $'
+            return formatted_price
+        else:
+            return ''
 
 class PriceFormatter:
     @staticmethod
     def normalize_price(price):
         numeric_part = ''.join(filter(str.isdigit, price))
-        formatted_price = '{:,}'.format(int(numeric_part))
-        formatted_price = formatted_price.replace(',', ' ')
-        formatted_price += ' $'
-        return formatted_price
+        if numeric_part:
+            formatted_price = '{:,}'.format(int(numeric_part))
+            formatted_price = formatted_price.replace(',', ' ')
+            formatted_price += ' $'
+            return formatted_price
+        else:
+            return ''
