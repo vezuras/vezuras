@@ -4,6 +4,10 @@ import json
 import os
 import atexit
 from datetime import datetime
+import signal
+import sys
+from scrapy.exceptions import DropItem
+
 
 class JsonWriterPipeline:
     def __init__(self):
@@ -14,7 +18,7 @@ class JsonWriterPipeline:
 
     def open_spider(self, spider):
         self.spider_name = spider.name
-        self.start_time = datetime.now()  # Initialise self.start_time
+        self.start_time = datetime.now()
 
         self.file_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
 
@@ -23,12 +27,17 @@ class JsonWriterPipeline:
         else:
             self.file_name_avpp = None
             self.file_name = f'centris_{self.start_time.strftime("%Y-%m-%d")}.json'
-        
+
         self.file_name_centris = f'centris_{self.start_time.strftime("%Y-%m-%d")}.json'
-        
+
         self.load_data()
 
         atexit.register(self.close_json)
+        signal.signal(signal.SIGINT, self.signal_handler)
+
+    def signal_handler(self, signal, frame):
+        self.close_json()
+        sys.exit(0)
 
     def load_data(self):
         self.items = {}
@@ -141,6 +150,12 @@ class MongoDBPipeline:
         self.start_time = None
         self.db = None
 
+    def get_collection_names(self):
+        if self.spider_name in ["duproprio", "kijiji", "lespac", "publimaison", "logisqc", "annoncextra"]:
+            return f'avpp_{self.start_time.strftime("%Y-%m-%d")}', f'centris_{self.start_time.strftime("%Y-%m-%d")}'
+        else:
+            return f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d")}', None
+
     @classmethod
     def from_crawler(cls, crawler):
         mongo_uri = crawler.settings.get('MONGO_URI')
@@ -153,90 +168,81 @@ class MongoDBPipeline:
         self.spider_name = spider.name
         self.start_time = datetime.now()
 
-        self.collection_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
-        self.avpp_collection_name = f'avpp_{self.start_time.strftime("%Y-%m-%d")}'
+        if self.spider_name in ["duproprio", "kijiji", "lespac", "publimaison", "logisqc", "annoncextra"]:
+            self.collection_name = f'avpp_{self.start_time.strftime("%Y-%m-%d")}'
+            self.avpp_collection_name = f'avpp_{self.start_time.strftime("%Y-%m-%d")}'
+        else:
+            self.collection_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d")}'
+
         self.centris_collection_name = f'centris_{self.start_time.strftime("%Y-%m-%d")}'
+            
+        if self.start_time is None:
+            raise ValueError('start_time has not been set.')
+            
+        self.client = MongoClient(self.mongo_uri)
+        self.db = self.client[self.mongo_db]
 
         self.load_data()
 
         atexit.register(self.close_mongodb)
-
-        self.client = MongoClient(self.mongo_uri)
-        self.db = self.client[self.mongo_db]
+        signal.signal(signal.SIGINT, self.signal_handler)
 
     def load_data(self):
         if self.db is not None:
-            if self.collection_name in self.db.list_collection_names():
-                self.items = self.db[self.collection_name].find_one() or {}
+            collection_name, centris_collection_name = self.get_collection_names()
+            
+        if collection_name in self.db.list_collection_names():
+            self.items = self.db[collection_name].find_one() or {}
 
-            if self.avpp_collection_name in self.db.list_collection_names():
-                self.avpp_items = self.db[self.avpp_collection_name].find_one() or {}
-
-            if self.centris_collection_name in self.db.list_collection_names():
-                self.centris_items = self.db[self.centris_collection_name].find_one() or {}
+        if centris_collection_name and centris_collection_name in self.db.list_collection_names():
+            self.centris_items = self.db[centris_collection_name].find_one() or {}
 
     def close_mongodb(self):
-        self.save_data()
-        self.client.close()
+        if self.db is not None:
+            self.save_data()  # Appelez save_data au lieu de flush_mongodb
+            self.client.close()
 
     def save_data(self):
-        if self.avpp_collection_name:
-            old_items = self.db[self.avpp_collection_name].find_one() or {}
-            old_spider_items = old_items.get(self.spider_name, [])
-            new_spider_items = self.items.get(self.spider_name, [])
-            updated_spider_items = old_spider_items + new_spider_items
-            updated_spider_items = list({item['url']: item for item in updated_spider_items}.values())
-            old_items[self.spider_name] = updated_spider_items
-            self.db[self.avpp_collection_name].replace_one({}, old_items, upsert=True)
+        collection_name, centris_collection_name = self.get_collection_names()
 
-    def close_spider(self, spider):
-        atexit.unregister(self.close_mongodb)
-        if self.db is not None:
-            self.save_data()
+        old_items = self.db[collection_name].find_one() or {}
+        old_spider_items = old_items.get(self.spider_name, [])
+        new_spider_items = self.items.get(self.spider_name, [])
+        updated_spider_items = old_spider_items + new_spider_items
+        updated_spider_items = list({item['url']: item for item in updated_spider_items}.values())
+        old_items[self.spider_name] = updated_spider_items
+
+        self.db[collection_name].update_one({}, {'$set': old_items}, upsert=True)
 
     def process_item(self, item, spider):
-        item_data = ItemAdapter(item).asdict()
+        adapter = ItemAdapter(item)
+        if adapter.get('url') not in [item['url'] for item in self.items.get(self.spider_name, [])]:
+            self.items.setdefault(self.spider_name, []).append(adapter.asdict())
+            return item
+        else:
+            raise DropItem("Duplicate item found: %s" % item)
 
-        if self.spider_name not in self.items:
-            self.items[self.spider_name] = []
-
-        if not self.is_duplicate(item_data):
-            if not self.is_centris_duplicate(item_data):
-                if 'phone' in item_data:
-                    item_data['phone'] = self.format_phone(item_data['phone'])
-                if 'price' in item_data:
-                    item_data['price'] = self.normalize_price(item_data['price'])
-                self.items[self.spider_name].append(item_data)
-
-        return item
+    def signal_handler(self, signal, frame):
+        self.close_mongodb()
 
     def is_duplicate(self, item_data):
-        for spider_name, items in self.items.items():
-            if spider_name != self.spider_name:
-                for item in items:
-                    if item.get('url') == item_data.get('url'):
-                        return True
-            else:
-                for existing_item in items:
-                    if existing_item.get('url') == item_data.get('url'):
-                        return True
-        return False
+        collection = self.db[self.collection_name]
+        count = collection.count_documents({'url': item_data.get('url'), 'spider_name': {'$ne': self.spider_name}})
+        if count > 0:
+            return True
+        else:
+            return False
 
     def is_centris_duplicate(self, item_data):
-        for centris_items in self.centris_items.values():
-            for centris_item in centris_items:
-                centris_latitude = centris_item.get('latitude')[:7] if centris_item.get('latitude') else None
-                centris_longitude = centris_item.get('longitude')[:7] if centris_item.get('longitude') else None
-                item_latitude = item_data.get('latitude')[:7] if item_data.get('latitude') else None
-                item_longitude = item_data.get('longitude')[:7] if item_data.get('longitude') else None
-
-                if (
-                    centris_latitude == item_latitude and
-                    centris_longitude == item_longitude
-                ):
-                    return True
-
-        return False
+        collection = self.db[self.centris_collection_name]
+        count = collection.count_documents({
+            'latitude': {'$regex': f"^{item_data.get('latitude')[:7]}"},
+            'longitude': {'$regex': f"^{item_data.get('longitude')[:7]}"}
+        })
+        if count > 0:
+            return True
+        else:
+            return False
 
     def format_phone(self, phone):
         formatted_phones = []
@@ -258,20 +264,11 @@ class MongoDBPipeline:
         formatted_price += ' $'
         return formatted_price
 
-
 class PriceFormatter:
     @staticmethod
     def normalize_price(price):
-        # Supprimer tous les caractères non numériques
         numeric_part = ''.join(filter(str.isdigit, price))
-
-        # Formater le prix avec des espaces
         formatted_price = '{:,}'.format(int(numeric_part))
-
-        # Remplacer la virgule par un espace
         formatted_price = formatted_price.replace(',', ' ')
-
-        # Ajouter le symbole du dollar canadien
         formatted_price += ' $'
-
         return formatted_price
