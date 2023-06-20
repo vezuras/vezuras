@@ -185,7 +185,9 @@ class MongoDBPipeline:
 
     def get_collection_names(self):
         if self.spider_name in ["duproprio_fr", "kijiji_fr", "lespac_fr", "publimaison_fr", "logisqc_fr", "annoncextra_fr"]:
-            return f'avpp_{self.start_time.strftime("%Y-%m-%d")}', f'centris'
+            return f'avpp_fr_{self.start_time.strftime("%Y-%m-%d")}', f'centris'
+        elif self.spider_name in ["duproprio_en", "kijiji_en", "lespac_en", "publimaison_en", "logisqc_en", "annoncextra_en"]:
+            return f'avpp_en_{self.start_time.strftime("%Y-%m-%d")}', f'centris'
         else:
             return f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d")}', None
 
@@ -204,8 +206,12 @@ class MongoDBPipeline:
         self.centris_collection_name = None
 
         if self.spider_name in ["duproprio_fr", "kijiji_fr", "lespac_fr", "publimaison_fr", "logisqc_fr", "annoncextra_fr"]:
-            self.collection_name = f'avpp_{self.start_time.strftime("%Y-%m-%d")}'
-            self.avpp_collection_name = f'avpp_{self.start_time.strftime("%Y-%m-%d")}'
+            self.collection_name = f'avpp_fr_{self.start_time.strftime("%Y-%m-%d")}'
+            self.avpp_collection_name = f'avpp__fr_{self.start_time.strftime("%Y-%m-%d")}'
+            self.spider_collection_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
+        elif self.spider_name in ["duproprio_en", "kijiji_en", "lespac_en", "publimaison_en", "logisqc_en", "annoncextra_en"]:
+            self.collection_name = f'avpp_en_{self.start_time.strftime("%Y-%m-%d")}'
+            self.avpp_collection_name = f'avpp_en_{self.start_time.strftime("%Y-%m-%d")}'
             self.spider_collection_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
         else:
             self.collection_name = 'centris'
@@ -241,8 +247,8 @@ class MongoDBPipeline:
     def save_data(self):
         old_items = self.db[self.collection_name].find_one() or {}
 
-        if self.spider_name in ["duproprio_fr", "kijiji_fr", "lespac_fr", "publimaison_fr", "logisqc_fr", "annoncextra_fr"]:
-            avpp_items_key = self.spider_name
+        if self.spider_name in ["duproprio_fr", "kijiji_fr", "lespac_fr", "publimaison_fr", "logisqc_fr", "annoncextra_fr", "duproprio_en", "kijiji_en", "lespac_en", "publimaison_en", "logisqc_en", "annoncextra_en"]:
+            avpp_items_key = self.spider_name[:-3]
             old_items[avpp_items_key] = self.items.get(self.spider_name, [])
             self.db[self.collection_name].update_one({}, {'$set': old_items}, upsert=True)
         else:
@@ -253,7 +259,7 @@ class MongoDBPipeline:
             old_items['centris'] = updated_centris_items
             self.db[self.collection_name].update_one({}, {'$set': old_items}, upsert=True)
 
-        spider_items_key = self.spider_name
+        spider_items_key = self.spider_name[:-3]
         spider_items = self.items.get(self.spider_name, [])
         spider_data = {spider_items_key: spider_items}
         self.db[self.spider_collection_name].update_one({}, {'$set': spider_data}, upsert=True)
@@ -271,6 +277,11 @@ class MongoDBPipeline:
                 if 'price' in item_data:
                     item_data['price'] = PriceFormatter.normalize_price(item_data['price'])
                 self.items[self.spider_name].append(item_data)
+
+            if self.spider_name == "centris_qc":
+                if 'centris' not in self.centris_items:
+                    self.centris_items['centris'] = []
+                self.centris_items['centris'].append(item_data)
 
         return item
 
@@ -336,4 +347,3 @@ class TranslationPipeline:
             translated_address = self.translator.translate(address)
             adapter['address']['street_address'] = translated_address
         return item
-
