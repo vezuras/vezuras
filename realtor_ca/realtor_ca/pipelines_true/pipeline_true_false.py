@@ -240,7 +240,6 @@ class MongoDBPipeline:
         self.file_name = None
         self.file_name_avpp = None
         self.file_name_centris = None
-        self.create_realtime_files = True
 
     def get_collection_names(self, spider):
         spider_name = spider.name
@@ -252,18 +251,18 @@ class MongoDBPipeline:
 
         if "centris" in spider_name:
             file_name = 'centris'
-            file_name_centris = f'centris'
+            file_name_centris = f'{spider_name}_{start_time.strftime("%Y-%m-%d_%H-%M")}'
         elif spider_name.endswith("_fr"):
-            file_name = f'{spider_name}_{start_time.strftime("%Y-%m-%d_%H-%M")}.json'
-            file_name_avpp = f'avpp_fr_{start_time.strftime("%Y-%m-%d")}.json'
+            file_name = f'{spider_name}_{start_time.strftime("%Y-%m-%d_%H-%M")}'
+            file_name_avpp = f'avpp_fr_{start_time.strftime("%Y-%m-%d")}'
         elif spider_name.endswith("_en"):
-            file_name = f'{spider_name}_{start_time.strftime("%Y-%m-%d_%H-%M")}.json'
-            file_name_avpp = f'avpp_en_{start_time.strftime("%Y-%m-%d")}.json'
+            file_name = f'{spider_name}_{start_time.strftime("%Y-%m-%d_%H-%M")}'
+            file_name_avpp = f'avpp_en_{start_time.strftime("%Y-%m-%d")}'
         else:
-            file_name = f'{spider_name}_{start_time.strftime("%Y-%m-%d_%H-%M")}.json'
+            file_name = f'{spider_name}_{start_time.strftime("%Y-%m-%d_%H-%M")}'
 
         return file_name, file_name_avpp, file_name_centris
-
+    
     @classmethod
     def from_crawler(cls, crawler):
         mongo_uri = crawler.settings.get('MONGO_URI')
@@ -276,21 +275,21 @@ class MongoDBPipeline:
 
         self.file_name, self.file_name_avpp, self.file_name_centris = self.get_collection_names(spider)
 
-        if self.spider_name in ["duproprio_fr", "kijiji_fr", "lespac_fr", "publimaison_fr", "logisqc_fr", "annoncextra_fr"]:
+        if spider.name in ["duproprio_fr", "kijiji_fr", "lespac_fr", "publimaison_fr", "logisqc_fr", "annoncextra_fr"]:
             self.collection_name = f'avpp_fr_{self.start_time.strftime("%Y-%m-%d")}.json'
             self.avpp_collection_name = f'avpp__fr_{self.start_time.strftime("%Y-%m-%d")}.json'
-            self.spider_collection_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
-        elif self.spider_name in ["duproprio_en", "kijiji_en", "lespac_en", "publimaison_en", "logisqc_en", "annoncextra_en"]:
+            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
+        elif spider.name in ["duproprio_en", "kijiji_en", "lespac_en", "publimaison_en", "logisqc_en", "annoncextra_en"]:
             self.collection_name = f'avpp_en_{self.start_time.strftime("%Y-%m-%d")}.json'
             self.avpp_collection_name = f'avpp_en_{self.start_time.strftime("%Y-%m-%d")}.json'
-            self.spider_collection_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
-        elif "centris" in self.spider_name:
+            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
+        elif "centris" in spider.name:
             self.collection_name = 'centris'
-            self.centris_collection_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d")}.json'
-            self.spider_collection_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
+            self.centris_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d")}.json'
+            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
         else:
-            self.collection_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
-            self.spider_collection_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
+            self.collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
+            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
             
         if self.start_time is None:
             raise ValueError('start_time has not been set.')
@@ -306,25 +305,24 @@ class MongoDBPipeline:
 
     def create_indexes(self):
         collection_name = self.db[self.collection_name]
-        centris_collection = self.db['centris']  # Nom de la collection Centris
-
-        # Créer des index sur les champs fréquemment utilisés
         collection_name.create_index('latitude')
         collection_name.create_index('longitude')
         collection_name.create_index('street_address')
         collection_name.create_index('url')
 
-        centris_collection.create_index('latitude')
-        centris_collection.create_index('longitude')
-        centris_collection.create_index('street_address')
-        centris_collection.create_index('url')
+        if "centris" in self.spider_name:
+            centris_collection = self.db['centris']  # Nom de la collection Centris
+            centris_collection.create_index('latitude')
+            centris_collection.create_index('longitude')
+            centris_collection.create_index('street_address')
+            centris_collection.create_index('url')
 
     def load_data(self):
         if self.db is not None:
             if self.file_name and self.file_name in self.db.list_collection_names():
                 self.items = self.db[self.file_name].find_one() or {}
 
-            if self.file_name_centris and self.file_name_centris in self.db.list_collection_names():
+            if self.file_name_centris is not None and self.file_name_centris in self.db.list_collection_names():
                 self.centris_items = self.db[self.file_name_centris].find_one() or {}
 
     def close_mongodb(self):
@@ -358,18 +356,6 @@ class MongoDBPipeline:
                         item['centris - latitude/longitude'] = is_duplicate
                         item['centris - street_address'] = is_duplicate
 
-            self.db[self.collection_name].update_one({}, {'$set': old_items}, upsert=True)
-
-        if not self.create_realtime_files:  # For other files (excluding avpp), create files in real-time
-            old_centris_items = old_items.get('centris', [])
-            new_centris_items = self.centris_items.get('centris', [])
-
-            # Filtrer les nouvelles annonces Centris qui n'ont pas la même URL que les annonces existantes
-            filtered_new_centris_items = [item for item in new_centris_items if item['url'] not in {existing_item['url'] for existing_item in old_centris_items}]
-
-            updated_centris_items = old_centris_items + filtered_new_centris_items
-            updated_centris_items = list({item['url']: item for item in updated_centris_items}.values())
-            old_items['centris'] = updated_centris_items
             self.db[self.collection_name].update_one({}, {'$set': old_items}, upsert=True)
 
         spider_items_key = self.spider_name[:-3]
@@ -412,12 +398,6 @@ class MongoDBPipeline:
             # and directly add the item to the list
             self.items[spider.name].append(item_data)
 
-            # If realtime file creation is enabled, save the data immediately
-            if self.create_realtime_files:
-                self.save_data()
-
-            return item
-
         # Add the centris keys to the AVPP item
         item_centris = item_data.get('centris')
         if item_centris:
@@ -440,14 +420,12 @@ class MongoDBPipeline:
             if "avpp" not in spider.name:
                 self.items[spider.name].append(item_data)
 
-            if self.create_realtime_files:  # Create files in real-time
-                self.save_data()
-
         if spider.name == "centris_qc":
             if 'centris' not in self.centris_items:
                 self.centris_items['centris'] = []
             self.centris_items['centris'].append(item_data)
 
+        self.save_data()
         return item
 
     def is_duplicate(self, item_data):
