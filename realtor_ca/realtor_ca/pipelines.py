@@ -8,6 +8,8 @@ import signal
 import sys
 from scrapy.exceptions import DropItem
 from translate import Translator
+from decimal import Decimal, ROUND_DOWN
+
 
 class StreetAddressWriterPipeline:
     def __init__(self):
@@ -292,6 +294,10 @@ class MongoDBPipeline:
         self.create_indexes() # Appel de la méthode create_indexes()
 
         self.load_data()
+        # centris_collection_data = self.db['centris'].find()
+        # for item in centris_collection_data:
+        #     print(item)
+
 
         atexit.register(self.close_mongodb)
         signal.signal(signal.SIGINT, self.signal_handler)
@@ -363,16 +369,24 @@ class MongoDBPipeline:
                     self.db[self.spider_collection_name].insert_one(item)
 
     def is_centris_duplicate(self, longitude, latitude, street_address):
-        if self.file_name != 'centris':
+        if self.spider_name != 'centris':
             return {}
 
         centris_collection = self.db['centris']  # Nom de la collection Centris à rechercher dans la base de données
 
         result = {}
 
+        tolerance = Decimal('0.00001')  # Tolerance de 5 chiffres après la virgule
+
         result['centris - latitude/longitude'] = centris_collection.count_documents({
-            'latitude': latitude,
-            'longitude': longitude
+            'latitude': {
+                '$gte': Decimal(str(latitude)) - tolerance,
+                '$lte': Decimal(str(latitude)) + tolerance,
+            },
+            'longitude': {
+                '$gte': Decimal(str(longitude)) - tolerance,
+                '$lte': Decimal(str(longitude)) + tolerance,
+            },
         }) > 0
 
         result['centris - street_address'] = centris_collection.count_documents({
@@ -407,10 +421,12 @@ class MongoDBPipeline:
                 longitude = item_centris.get('longitude')
                 latitude = item_centris.get('latitude')
                 street_address = item_centris.get('street_address')
-                if latitude and longitude and street_address:
-                    is_duplicate = self.is_centris_duplicate(item_data, longitude, latitude, street_address)
-                    item_data['centris - latitude/longitude'] = latitude + ', ' + longitude if is_duplicate else False
-                    item_data['centris - street_address'] = street_address if is_duplicate else False
+                if latitude and longitude or street_address:
+                    # is_duplicate = self.is_centris_duplicate(longitude, latitude, street_address)
+                    is_duplicate = self.is_centris_duplicate(item_data.get('longitude'), item_data.get('latitude'), item_data.get('street_address'))
+                    item_data['centris - latitude/longitude'] = latitude + ', ' + longitude if is_duplicate and latitude and longitude else False
+                    item_data['centris - street_address'] = street_address if is_duplicate and street_address else False
+
             else:
                 print("Item does not have centris data")  # Debug: Print when centris data is missing
 
@@ -422,7 +438,7 @@ class MongoDBPipeline:
 
                 if "avpp" not in spider.name:
                     self.items[spider.name].append(item_data)
-
+            
         if "centris" in self.spider_name:
             if 'centris' not in self.centris_items:
                 self.centris_items['centris'] = []
@@ -448,7 +464,7 @@ class MongoDBPipeline:
                 latitude = item_centris.get('latitude')
                 street_address = item_centris.get('street_address')
                 if latitude and longitude and street_address:
-                    is_duplicate = self.is_centris_duplicate(item, longitude, latitude, street_address)
+                    is_duplicate = self.is_centris_duplicate(longitude, latitude, street_address)
                     item['centris - latitude/longitude'] = is_duplicate
                     item['centris - street_address'] = is_duplicate
 
