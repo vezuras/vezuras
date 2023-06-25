@@ -236,10 +236,6 @@ class MongoDBPipeline:
         self.avpp_items = {}
         self.centris_items = {}
         self.start_time = None
-        self.db = None
-        self.file_name = None
-        self.file_name_avpp = None
-        self.file_name_centris = None
 
     def get_collection_names(self, spider):
         spider_name = spider.name
@@ -249,10 +245,7 @@ class MongoDBPipeline:
         file_name_avpp = None
         file_name_centris = None
 
-        if "centris" in spider_name:
-            file_name = 'centris'
-            file_name_centris = f'{spider_name}_{start_time.strftime("%Y-%m-%d_%H-%M")}'
-        elif spider_name.endswith("_fr"):
+        if spider_name.endswith("_fr"):
             file_name = f'{spider_name}_{start_time.strftime("%Y-%m-%d_%H-%M")}'
             file_name_avpp = f'avpp_fr_{start_time.strftime("%Y-%m-%d")}'
         elif spider_name.endswith("_en"):
@@ -276,20 +269,20 @@ class MongoDBPipeline:
         self.file_name, self.file_name_avpp, self.file_name_centris = self.get_collection_names(spider)
 
         if spider.name in ["duproprio_fr", "kijiji_fr", "lespac_fr", "publimaison_fr", "logisqc_fr", "annoncextra_fr"]:
-            self.collection_name = f'avpp_fr_{self.start_time.strftime("%Y-%m-%d")}.json'
-            self.avpp_collection_name = f'avpp__fr_{self.start_time.strftime("%Y-%m-%d")}.json'
-            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
+            self.collection_name = f'avpp_fr_{self.start_time.strftime("%Y-%m-%d")}'
+            self.avpp_collection_name = f'avpp__fr_{self.start_time.strftime("%Y-%m-%d")}'
+            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
         elif spider.name in ["duproprio_en", "kijiji_en", "lespac_en", "publimaison_en", "logisqc_en", "annoncextra_en"]:
-            self.collection_name = f'avpp_en_{self.start_time.strftime("%Y-%m-%d")}.json'
-            self.avpp_collection_name = f'avpp_en_{self.start_time.strftime("%Y-%m-%d")}.json'
-            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
+            self.collection_name = f'avpp_en_{self.start_time.strftime("%Y-%m-%d")}'
+            self.avpp_collection_name = f'avpp_en_{self.start_time.strftime("%Y-%m-%d")}'
+            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
         elif "centris" in spider.name:
             self.collection_name = 'centris'
-            self.centris_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d")}.json'
-            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
+            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
         else:
-            self.collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
-            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
+            self.collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
+            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
+
             
         if self.start_time is None:
             raise ValueError('start_time has not been set.')
@@ -358,10 +351,16 @@ class MongoDBPipeline:
 
             self.db[self.collection_name].update_one({}, {'$set': old_items}, upsert=True)
 
-        spider_items_key = self.spider_name[:-3]
-        spider_items = self.items.get(self.spider_name, [])
-        spider_data = {spider_items_key: spider_items}
-        self.db[self.spider_collection_name].update_one({}, {'$set': spider_data}, upsert=True)
+        if "centris" in self.spider_name:
+            spider_items = self.items.get(self.spider_name, [])
+            for item in spider_items:
+                query = {'url': item['url']}
+                new_values = { "$set": item }
+                self.db[self.spider_collection_name].update_one(query, new_values, upsert=True)
+        else:  
+            for item in new_avpp_items:
+                if self.db[self.spider_collection_name].find_one({'url': item['url']}) is None:
+                    self.db[self.spider_collection_name].insert_one(item)
 
     def is_centris_duplicate(self, item_data, longitude, latitude, street_address):
         if self.file_name != 'centris':
@@ -437,7 +436,6 @@ class MongoDBPipeline:
 
     def signal_handler(self, signal, frame):
         # Ajouter les clés centris aux éléments AVPP avant la fermeture du script
-        avpp_items_key = self.spider_name[:-3]
         avpp_items = self.items.get(self.spider_name, [])
         for item in avpp_items:
             item_centris = item.get('centris')
