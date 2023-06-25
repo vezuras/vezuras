@@ -13,12 +13,6 @@ class StreetAddressWriterPipeline:
     def __init__(self):
         self.addresses = []
         self.file = None
-        signal.signal(signal.SIGINT, self.signal_handler)
-
-    def signal_handler(self, signal, frame):
-        print('Ctrl+C pressed! Saving addresses and closing file...')
-        self.close_file()
-        sys.exit(0)
 
     def open_spider(self, spider):
         if spider.name in ["duproprio_fr", "kijiji_fr", "lespac_fr", "publimaison_fr", "logisqc_fr", "annoncextra_fr"]:
@@ -55,14 +49,20 @@ class JsonWriterPipeline:
         self.start_time = datetime.now()
 
         self.file_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
+        self.file_name_avpp = None
+        self.file_name_centris = None
 
-        if self.spider_name in ["duproprio_fr", "kijiji_fr", "lespac_fr", "publimaison_fr", "logisqc_fr", "annoncextra_fr"]:
-            self.file_name_avpp = f'avpp_{self.start_time.strftime("%Y-%m-%d")}.json'
-        else:
-            self.file_name_avpp = None
+        if "centris" in self.spider_name:
             self.file_name = f'centris.json'
-
-        self.file_name_centris = f'centris.json'
+            self.file_name_centris = f'centris_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
+        elif self.spider_name.endswith("_fr"):
+            self.file_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
+            self.file_name_avpp = f'avpp_fr_{self.start_time.strftime("%Y-%m-%d")}.json'
+        elif self.spider_name.endswith("_en"):
+            self.file_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
+            self.file_name_avpp = f'avpp_en_{self.start_time.strftime("%Y-%m-%d")}.json'
+        else:
+            self.file_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}.json'
 
         self.load_data()
 
@@ -87,7 +87,7 @@ class JsonWriterPipeline:
                 if data_avpp:
                     self.avpp_items = json.loads(data_avpp)
 
-        if os.path.exists(self.file_name_centris):
+        if self.file_name_centris is not None and os.path.exists(self.file_name_centris):
             with open(self.file_name_centris, 'r', encoding='utf-8') as file_centris:
                 data_centris = file_centris.read()
                 if data_centris:
@@ -96,12 +96,30 @@ class JsonWriterPipeline:
     def close_json(self):
         if self.file_name_avpp is not None:
             with open(self.file_name_avpp, 'w', encoding='utf-8') as file_avpp:
-                self.avpp_items[self.spider_name] = self.items.get(self.spider_name, [])
+                existing_avpp_items = self.avpp_items.get(self.spider_name, [])
+                existing_avpp_urls = set(item.get('url') for item in existing_avpp_items)
+                new_avpp_items = [item for item in self.items.get(self.spider_name, []) if item.get('url') not in existing_avpp_urls]
+                self.avpp_items[self.spider_name] = existing_avpp_items + new_avpp_items
                 json.dump(self.avpp_items, file_avpp, ensure_ascii=False)
+
+                if self.spider_name.endswith(("_fr", "_en")):
+                    self.update_avpp_centris_duplicates()
+        else:
+            self.avpp_items[self.spider_name] = self.items.get(self.spider_name, [])
 
         if self.file_name is not None:
             with open(self.file_name, 'w', encoding='utf-8') as file:
                 json.dump(self.items, file, ensure_ascii=False)
+
+        if self.file_name_centris is not None:
+            with open(self.file_name_centris, 'w', encoding='utf-8') as file_centris:
+                existing_centris_items = self.centris_items.get(self.spider_name, [])
+                existing_centris_urls = set(item.get('url') for item in existing_centris_items)
+                new_centris_items = [item for item in self.items.get(self.spider_name, []) if item.get('url') not in existing_centris_urls]
+                self.centris_items[self.spider_name] = existing_centris_items + new_centris_items
+                json.dump(self.centris_items, file_centris, ensure_ascii=False)
+        else:
+            self.centris_items[self.spider_name] = self.items.get(self.spider_name, [])
 
     def close_spider(self, spider):
         atexit.unregister(self.close_json)
@@ -110,8 +128,14 @@ class JsonWriterPipeline:
     def flush_json(self):
         if self.file_name_avpp is not None:
             with open(self.file_name_avpp, 'w', encoding='utf-8') as file_avpp:
-                self.avpp_items[self.spider_name] = self.items.get(self.spider_name, [])
+                existing_avpp_items = self.avpp_items.get(self.spider_name, [])
+                existing_avpp_urls = set(item.get('url') for item in existing_avpp_items)
+                new_avpp_items = [item for item in self.items.get(self.spider_name, []) if item.get('url') not in existing_avpp_urls]
+                self.avpp_items[self.spider_name] = existing_avpp_items + new_avpp_items
                 json.dump(self.avpp_items, file_avpp, ensure_ascii=False)
+
+                if self.spider_name.endswith(("_fr", "_en")):
+                    self.update_avpp_centris_duplicates()
 
         if self.file_name is not None:
             with open(self.file_name, 'w', encoding='utf-8') as file:
@@ -127,9 +151,15 @@ class JsonWriterPipeline:
             if not self.is_centris_duplicate(item_data):
                 if 'phone' in item_data:
                     item_data['phone'] = self.format_phone(item_data['phone'])
-                if 'price' in item_data:
-                    item_data['price'] = PriceFormatter.normalize_price(item_data['price'])
+                item_data.setdefault('centris - latitude/longitude', False)
+                item_data.setdefault('centris - street_address', False)
                 self.items[self.spider_name].append(item_data)
+
+                if self.file_name_avpp is not None and self.spider_name.endswith(("_fr", "_en")):
+                    existing_avpp_urls = set(item.get('url') for item in self.avpp_items.get(self.spider_name, []))
+                    if item_data.get('url') not in existing_avpp_urls:
+                        self.avpp_items[self.spider_name] = self.avpp_items.get(self.spider_name, [])
+                        self.avpp_items[self.spider_name].append(item_data)
 
         return item
 
@@ -140,23 +170,19 @@ class JsonWriterPipeline:
                     if item.get('url') == item_data.get('url'):
                         return True
             else:
-                for existing_item in items:
-                    if existing_item.get('url') == item_data.get('url'):
-                        return True
+                existing_urls = set(item.get('url') for item in items)
+                if item_data.get('url') in existing_urls:
+                    return True
         return False
 
     def is_centris_duplicate(self, item_data):
         for centris_items in self.centris_items.values():
             for centris_item in centris_items:
-                centris_latitude = centris_item.get('latitude')[:7] if centris_item.get('latitude') else None
-                centris_longitude = centris_item.get('longitude')[:7] if centris_item.get('longitude') else None
-                item_latitude = item_data.get('latitude')[:7] if item_data.get('latitude') else None
-                item_longitude = item_data.get('longitude')[:7] if item_data.get('longitude') else None
+                centris_street_address = centris_item.get('address', {}).get('street_address') if centris_item.get('address') else None
+                item_street_address = item_data.get('address', {}).get('street_address') if item_data.get('address') else None
 
-                if (
-                    centris_latitude == item_latitude and
-                    centris_longitude == item_longitude
-                ):
+                if centris_street_address == item_street_address:
+                    item_data['centris - street_address'] = True
                     return True
 
         return False
@@ -173,6 +199,35 @@ class JsonWriterPipeline:
                 formatted_phones.append(f'+1-{formatted_phone}')
         return formatted_phones
 
+    def update_avpp_centris_duplicates(self):
+        for spider_name, avpp_items in self.avpp_items.items():
+            if spider_name == self.spider_name:
+                continue
+
+            for avpp_item in avpp_items:
+                avpp_street_address = avpp_item.get('address', {}).get('street_address') if avpp_item.get('address') else None
+
+                duplicate_found = False
+                for centris_items in self.centris_items.values():
+                    for centris_item in centris_items:
+                        centris_street_address = centris_item.get('address', {}).get('street_address') if centris_item.get('address') else None
+
+                        if centris_street_address == avpp_street_address:
+                            avpp_item['centris - street_address'] = True
+                            duplicate_found = True
+                            break
+                    if duplicate_found:
+                        break
+
+                if not duplicate_found:
+                    avpp_item.setdefault('centris - street_address', False)
+
+        # Ajouter la clé "centris - latitude/longitude" au fichier avpp
+        if self.file_name_avpp is not None:
+            with open(self.file_name_avpp, 'w', encoding='utf-8') as file_avpp:
+                json.dump(self.avpp_items, file_avpp, ensure_ascii=False)
+
+
 class MongoDBPipeline:
     def __init__(self, mongo_uri, mongo_db):
         self.mongo_uri = mongo_uri
@@ -181,63 +236,87 @@ class MongoDBPipeline:
         self.avpp_items = {}
         self.centris_items = {}
         self.start_time = None
-        self.db = None
 
-    def get_collection_names(self):
-        if self.spider_name in ["duproprio_fr", "kijiji_fr", "lespac_fr", "publimaison_fr", "logisqc_fr", "annoncextra_fr"]:
-            return f'avpp_fr_{self.start_time.strftime("%Y-%m-%d")}', f'centris'
-        elif self.spider_name in ["duproprio_en", "kijiji_en", "lespac_en", "publimaison_en", "logisqc_en", "annoncextra_en"]:
-            return f'avpp_en_{self.start_time.strftime("%Y-%m-%d")}', f'centris'
+    def get_collection_names(self, spider):
+        spider_name = spider.name
+        start_time = datetime.now()
+
+        file_name = None
+        file_name_avpp = None
+        file_name_centris = None
+
+        if spider_name.endswith("_fr"):
+            file_name = f'{spider_name}_{start_time.strftime("%Y-%m-%d_%H-%M")}'
+            file_name_avpp = f'avpp_fr_{start_time.strftime("%Y-%m-%d")}'
+        elif spider_name.endswith("_en"):
+            file_name = f'{spider_name}_{start_time.strftime("%Y-%m-%d_%H-%M")}'
+            file_name_avpp = f'avpp_en_{start_time.strftime("%Y-%m-%d")}'
         else:
-            return f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d")}', None
+            file_name = f'{spider_name}_{start_time.strftime("%Y-%m-%d_%H-%M")}'
 
+        return file_name, file_name_avpp, file_name_centris
+    
     @classmethod
     def from_crawler(cls, crawler):
         mongo_uri = crawler.settings.get('MONGO_URI')
         mongo_db = crawler.settings.get('MONGO_DATABASE')
-        print(f"MONGO_URI: {mongo_uri}")
-        print(f"MONGO_DATABASE: {mongo_db}")
         return cls(mongo_uri=mongo_uri, mongo_db=mongo_db)
 
     def open_spider(self, spider):
         self.spider_name = spider.name
         self.start_time = datetime.now()
 
-        self.centris_collection_name = None
+        self.file_name, self.file_name_avpp, self.file_name_centris = self.get_collection_names(spider)
 
-        if self.spider_name in ["duproprio_fr", "kijiji_fr", "lespac_fr", "publimaison_fr", "logisqc_fr", "annoncextra_fr"]:
+        if spider.name in ["duproprio_fr", "kijiji_fr", "lespac_fr", "publimaison_fr", "logisqc_fr", "annoncextra_fr"]:
             self.collection_name = f'avpp_fr_{self.start_time.strftime("%Y-%m-%d")}'
             self.avpp_collection_name = f'avpp__fr_{self.start_time.strftime("%Y-%m-%d")}'
-            self.spider_collection_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
-        elif self.spider_name in ["duproprio_en", "kijiji_en", "lespac_en", "publimaison_en", "logisqc_en", "annoncextra_en"]:
+            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
+        elif spider.name in ["duproprio_en", "kijiji_en", "lespac_en", "publimaison_en", "logisqc_en", "annoncextra_en"]:
             self.collection_name = f'avpp_en_{self.start_time.strftime("%Y-%m-%d")}'
             self.avpp_collection_name = f'avpp_en_{self.start_time.strftime("%Y-%m-%d")}'
-            self.spider_collection_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
-        else:
+            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
+        elif "centris" in spider.name:
             self.collection_name = 'centris'
-            self.centris_collection_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d")}'
-            self.spider_collection_name = f'{self.spider_name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
+            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
+        else:
+            self.collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
+            self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
 
+            
         if self.start_time is None:
             raise ValueError('start_time has not been set.')
 
         self.client = MongoClient(self.mongo_uri)
         self.db = self.client[self.mongo_db]
+        self.create_indexes() # Appel de la méthode create_indexes()
 
         self.load_data()
 
         atexit.register(self.close_mongodb)
         signal.signal(signal.SIGINT, self.signal_handler)
 
+    def create_indexes(self):
+        collection_name = self.db[self.collection_name]
+        collection_name.create_index('latitude')
+        collection_name.create_index('longitude')
+        collection_name.create_index('street_address')
+        collection_name.create_index('url')
+
+        if "centris" in self.spider_name:
+            centris_collection = self.db['centris']  # Nom de la collection Centris
+            centris_collection.create_index('latitude')
+            centris_collection.create_index('longitude')
+            centris_collection.create_index('street_address')
+            centris_collection.create_index('url')
+
     def load_data(self):
         if self.db is not None:
-            collection_name, centris_collection_name = self.get_collection_names()
-            
-            if collection_name in self.db.list_collection_names():
-                self.items = self.db[collection_name].find_one() or {}
+            if self.file_name and self.file_name in self.db.list_collection_names():
+                self.items = self.db[self.file_name].find_one() or {}
 
-            if centris_collection_name and centris_collection_name in self.db.list_collection_names():
-                self.centris_items = self.db[centris_collection_name].find_one() or {}
+            if self.file_name_centris is not None and self.file_name_centris in self.db.list_collection_names():
+                self.centris_items = self.db[self.file_name_centris].find_one() or {}
 
     def close_mongodb(self):
         if self.db is not None:
@@ -247,69 +326,134 @@ class MongoDBPipeline:
     def save_data(self):
         old_items = self.db[self.collection_name].find_one() or {}
 
-        if self.spider_name in ["duproprio_fr", "kijiji_fr", "lespac_fr", "publimaison_fr", "logisqc_fr", "annoncextra_fr", "duproprio_en", "kijiji_en", "lespac_en", "publimaison_en", "logisqc_en", "annoncextra_en"]:
+        if self.file_name_avpp is None or self.file_name != self.file_name_avpp:
             avpp_items_key = self.spider_name[:-3]
-            old_items[avpp_items_key] = self.items.get(self.spider_name, [])
-            self.db[self.collection_name].update_one({}, {'$set': old_items}, upsert=True)
-        else:
-            old_centris_items = old_items.get('centris', [])
-            new_centris_items = self.centris_items.get('centris', [])
-            updated_centris_items = old_centris_items + new_centris_items
-            updated_centris_items = list({item['url']: item for item in updated_centris_items}.values())
-            old_items['centris'] = updated_centris_items
+            old_avpp_items = old_items.get(avpp_items_key, [])
+            new_avpp_items = self.items.get(self.spider_name, [])
+
+            # Filtrer les nouvelles annonces AVPP qui n'ont pas la même URL que les annonces existantes
+            filtered_new_avpp_items = [item for item in new_avpp_items if item['url'] not in {existing_item['url'] for existing_item in old_avpp_items}]
+
+            updated_avpp_items = old_avpp_items + filtered_new_avpp_items
+            old_items[avpp_items_key] = updated_avpp_items
+
+            # Ajouter les clés centris à chaque élément AVPP
+            for item in updated_avpp_items:
+                item_centris = item.get('centris')
+                if item_centris:
+                    latitude = item_centris.get('latitude')
+                    longitude = item_centris.get('longitude')
+                    street_address = item_centris.get('street_address')
+                    if latitude and longitude and street_address:
+                        is_duplicate = self.is_centris_duplicate(longitude, latitude, street_address)
+                        item['centris - latitude/longitude'] = is_duplicate
+                        item['centris - street_address'] = is_duplicate
+
             self.db[self.collection_name].update_one({}, {'$set': old_items}, upsert=True)
 
-        spider_items_key = self.spider_name[:-3]
-        spider_items = self.items.get(self.spider_name, [])
-        spider_data = {spider_items_key: spider_items}
-        self.db[self.spider_collection_name].update_one({}, {'$set': spider_data}, upsert=True)
+        if "centris" in self.spider_name:
+            spider_items = self.items.get(self.spider_name, [])
+            for item in spider_items:
+                query = {'url': item['url']}
+                new_values = { "$set": item }
+                self.db[self.spider_collection_name].update_one(query, new_values, upsert=True)
+        else:  
+            for item in new_avpp_items:
+                if self.db[self.spider_collection_name].find_one({'url': item['url']}) is None:
+                    self.db[self.spider_collection_name].insert_one(item)
+
+    def is_centris_duplicate(self, longitude, latitude, street_address):
+        if self.file_name != 'centris':
+            return {}
+
+        centris_collection = self.db['centris']  # Nom de la collection Centris à rechercher dans la base de données
+
+        result = {}
+
+        result['centris - latitude/longitude'] = centris_collection.count_documents({
+            'latitude': latitude,
+            'longitude': longitude
+        }) > 0
+
+        result['centris - street_address'] = centris_collection.count_documents({
+            'street_address': street_address
+        }) > 0
+
+        return result
 
     def process_item(self, item, spider):
         item_data = dict(item)
 
-        if self.spider_name not in self.items:
-            self.items[self.spider_name] = []
+        if "centris" not in spider.name:
+            item_data['centris - latitude/longitude'] = False
+            item_data['centris - street_address'] = False
 
-        if not self.is_duplicate(item_data):
-            if not self.is_centris_duplicate(item_data):
-                if 'phone' in item_data:
-                    item_data['phone'] = self.format_phone(item_data['phone'])
+        if spider.name not in self.items:
+            self.items[spider.name] = []
+
+        # Check if the spider name contains "centris"
+        if "centris" in spider.name:
+            # Check if an item with the same URL already exists in the 'centris' collection
+            existing_item = self.db['centris'].find_one({'url': item_data['url']})
+
+            # If the item does not exist, insert it into the collection
+            if existing_item is None:
+                self.db['centris'].insert_one(item_data)
+                self.items[spider.name].append(item_data)
+        else:
+            # Add the centris keys to the AVPP item
+            item_centris = item_data.get('centris')
+            if item_centris:
+                longitude = item_centris.get('longitude')
+                latitude = item_centris.get('latitude')
+                street_address = item_centris.get('street_address')
+                if latitude and longitude and street_address:
+                    is_duplicate = self.is_centris_duplicate(item_data, longitude, latitude, street_address)
+                    item_data['centris - latitude/longitude'] = latitude + ', ' + longitude if is_duplicate else False
+                    item_data['centris - street_address'] = street_address if is_duplicate else False
+            else:
+                print("Item does not have centris data")  # Debug: Print when centris data is missing
+
+            if not self.is_duplicate(item_data):
+                # if 'phone' in item_data:
+                #     item_data['phone'] = self.format_phone(item_data['phone'])
                 if 'price' in item_data:
                     item_data['price'] = PriceFormatter.normalize_price(item_data['price'])
-                self.items[self.spider_name].append(item_data)
 
-            if self.spider_name == "centris_qc":
-                if 'centris' not in self.centris_items:
-                    self.centris_items['centris'] = []
-                self.centris_items['centris'].append(item_data)
+                if "avpp" not in spider.name:
+                    self.items[spider.name].append(item_data)
 
+        if "centris" in self.spider_name:
+            if 'centris' not in self.centris_items:
+                self.centris_items['centris'] = []
+            self.centris_items['centris'].append(item_data)
+
+        self.save_data()
         return item
 
-    def signal_handler(self, signal, frame):
-        self.close_mongodb()
-
     def is_duplicate(self, item_data):
-        collection = self.db[self.collection_name]
-        count = collection.count_documents({'url': item_data.get('url'), 'spider_name': {'$ne': self.spider_name}})
-        if count > 0:
-            return True
-        else:
-            return False
+        for items in self.items.values():
+            for existing_item in items:
+                if existing_item['url'] == item_data['url']:
+                    return True
+        return False
 
-    def is_centris_duplicate(self, item_data):
-        if self.collection_name != 'centris':
-            return False
+    def signal_handler(self, signal, frame):
+        # Ajouter les clés centris aux éléments AVPP avant la fermeture du script
+        avpp_items = self.items.get(self.spider_name, [])
+        for item in avpp_items:
+            item_centris = item.get('centris')
+            if item_centris:
+                longitude = item_centris.get('longitude')
+                latitude = item_centris.get('latitude')
+                street_address = item_centris.get('street_address')
+                if latitude and longitude and street_address:
+                    is_duplicate = self.is_centris_duplicate(item, longitude, latitude, street_address)
+                    item['centris - latitude/longitude'] = is_duplicate
+                    item['centris - street_address'] = is_duplicate
 
-        centris_collection = self.db[self.collection_name]
-        count = centris_collection.count_documents({
-            'latitude': {'$regex': f"^{item_data.get('latitude')[:7]}"},
-            'longitude': {'$regex': f"^{item_data.get('longitude')[:7]}"}
-        })
-
-        if count > 0:
-            return True
-        else:
-            return False
+        self.save_data()
+        self.close_mongodb()
 
     def format_phone(self, phone):
         formatted_phones = []
@@ -335,15 +479,3 @@ class PriceFormatter:
                 return formatted_price
 
         return ''
-
-class TranslationPipeline:
-    def __init__(self):
-        self.translator = Translator(to_lang='en')
-
-    def process_item(self, item, spider):
-        adapter = ItemAdapter(item)
-        address = adapter.get('address', {}).get('street_address')
-        if address:
-            translated_address = self.translator.translate(address)
-            adapter['address']['street_address'] = translated_address
-        return item
