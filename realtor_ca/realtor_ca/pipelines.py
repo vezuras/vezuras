@@ -9,6 +9,8 @@ import sys
 from scrapy.exceptions import DropItem
 from translate import Translator
 from decimal import Decimal, ROUND_DOWN
+from bson import ObjectId
+import threading
 
 
 class StreetAddressWriterPipeline:
@@ -269,14 +271,13 @@ class MongoDBPipeline:
         self.start_time = datetime.now()
 
         self.file_name, self.file_name_avpp, self.file_name_centris = self.get_collection_names(spider)
+        self.backup_collection_name = f'{spider.name}_backup_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
 
         if spider.name in ["duproprio_fr", "kijiji_fr", "lespac_fr", "publimaison_fr", "logisqc_fr", "annoncextra_fr"]:
             self.collection_name = f'avpp_fr_{self.start_time.strftime("%Y-%m-%d")}'
-            self.avpp_collection_name = f'avpp__fr_{self.start_time.strftime("%Y-%m-%d")}'
             self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
         elif spider.name in ["duproprio_en", "kijiji_en", "lespac_en", "publimaison_en", "logisqc_en", "annoncextra_en"]:
             self.collection_name = f'avpp_en_{self.start_time.strftime("%Y-%m-%d")}'
-            self.avpp_collection_name = f'avpp_en_{self.start_time.strftime("%Y-%m-%d")}'
             self.spider_collection_name = f'{spider.name}_{self.start_time.strftime("%Y-%m-%d_%H-%M")}'
         elif "centris" in spider.name:
             self.collection_name = 'centris'
@@ -291,16 +292,38 @@ class MongoDBPipeline:
 
         self.client = MongoClient(self.mongo_uri)
         self.db = self.client[self.mongo_db]
-        self.create_indexes() # Appel de la méthode create_indexes()
+        self.create_indexes()
 
         self.load_data()
-        # centris_collection_data = self.db['centris'].find()
-        # for item in centris_collection_data:
-        #     print(item)
-
 
         atexit.register(self.close_mongodb)
         signal.signal(signal.SIGINT, self.signal_handler)
+
+    def close_spider(self, spider):
+        self.save_data()
+        self.client.close()
+
+    def close_mongodb(self):
+        if self.db is not None:
+            self.save_data()
+            self.client.close()
+
+    def signal_handler(self, signal, frame):
+        avpp_items = self.items.get(self.spider_name, [])
+        for item in avpp_items:
+            item_centris = item.get('centris')
+            if item_centris:
+                longitude = item_centris.get('longitude')
+                latitude = item_centris.get('latitude')
+                street_address = item_centris.get('street_address')
+                if latitude and longitude and street_address:
+                    is_duplicate = self.is_centris_duplicate(longitude, latitude, street_address)
+                    item['centris - latitude/longitude'] = is_duplicate
+                    item['centris - street_address'] = is_duplicate
+
+        self.save_data()
+        self.client.close()
+        self.close_mongodb()
 
     def create_indexes(self):
         collection_name = self.db[self.collection_name]
@@ -310,7 +333,7 @@ class MongoDBPipeline:
         collection_name.create_index('url')
 
         if "centris" in self.spider_name:
-            centris_collection = self.db['centris']  # Nom de la collection Centris
+            centris_collection = self.db['centris']
             centris_collection.create_index('latitude')
             centris_collection.create_index('longitude')
             centris_collection.create_index('street_address')
@@ -324,15 +347,10 @@ class MongoDBPipeline:
             if self.file_name_centris is not None and self.file_name_centris in self.db.list_collection_names():
                 self.centris_items = self.db[self.file_name_centris].find_one() or {}
 
-    def close_mongodb(self):
-        if self.db is not None:
-            self.save_data()
-            self.client.close()
-
     def save_data(self):
         old_items = self.db[self.collection_name].find_one() or {}
 
-        if self.file_name_avpp is None or self.file_name != self.file_name_avpp:
+        if self.file_name_avpp is not None and "avpp" in self.file_name_avpp:
             avpp_items_key = self.spider_name[:-3]
             old_avpp_items = old_items.get(avpp_items_key, [])
             new_avpp_items = self.items.get(self.spider_name, [])
@@ -356,27 +374,37 @@ class MongoDBPipeline:
                         item['centris - street_address'] = is_duplicate
 
             self.db[self.collection_name].update_one({}, {'$set': old_items}, upsert=True)
+            self.db[self.backup_collection_name].insert_many(new_avpp_items)
 
-        if "centris" in self.spider_name:
-            spider_items = self.items.get(self.spider_name, [])
-            for item in spider_items:
-                query = {'url': item['url']}
-                new_values = { "$set": item }
-                self.db[self.spider_collection_name].update_one(query, new_values, upsert=True)
-        else:  
-            for item in new_avpp_items:
-                if self.db[self.spider_collection_name].find_one({'url': item['url']}) is None:
-                    self.db[self.spider_collection_name].insert_one(item)
+        elif "centris" in self.spider_name:
+            centris_lock = threading.Lock()
+            centris_items = self.items.get(self.spider_name, [])
+            if centris_items:
+                existing_urls = {item['url'] for item in self.db['centris'].find({}, {'url': 1})}
+                filtered_centris_items = [item for item in centris_items if item['url'] not in existing_urls]
+
+                # Acquérir le verrou avant l'insertion dans la collection "centris"
+                with centris_lock:
+                    self.db['centris'].insert_many(filtered_centris_items)
+                    self.db[self.backup_collection_name].insert_many(filtered_centris_items)
+
+        else:
+            # Sauvegarde des données dans la collection de sauvegarde pour les autres fichiers
+            items_to_save = self.items.get(self.spider_name, [])
+            if items_to_save:
+                self.db[self.backup_collection_name].insert_many(items_to_save)
+
+        self.items = {}
 
     def is_centris_duplicate(self, longitude, latitude, street_address):
         if self.spider_name != 'centris':
             return {}
 
-        centris_collection = self.db['centris']  # Nom de la collection Centris à rechercher dans la base de données
+        centris_collection = self.db['centris']
 
         result = {}
 
-        tolerance = Decimal('0.00001')  # Tolerance de 5 chiffres après la virgule
+        tolerance = Decimal('0.00001')
 
         result['centris - latitude/longitude'] = centris_collection.count_documents({
             'latitude': {
@@ -405,34 +433,24 @@ class MongoDBPipeline:
         if spider.name not in self.items:
             self.items[spider.name] = []
 
-        # Check if the spider name contains "centris"
         if "centris" in spider.name:
-            # Check if an item with the same URL already exists in the 'centris' collection
             existing_item = self.db['centris'].find_one({'url': item_data['url']})
-
-            # If the item does not exist, insert it into the collection
             if existing_item is None:
-                self.db['centris'].insert_one(item_data)
                 self.items[spider.name].append(item_data)
         else:
-            # Add the centris keys to the AVPP item
             item_centris = item_data.get('centris')
             if item_centris:
                 longitude = item_centris.get('longitude')
                 latitude = item_centris.get('latitude')
                 street_address = item_centris.get('street_address')
                 if latitude and longitude or street_address:
-                    # is_duplicate = self.is_centris_duplicate(longitude, latitude, street_address)
                     is_duplicate = self.is_centris_duplicate(item_data.get('longitude'), item_data.get('latitude'), item_data.get('street_address'))
                     item_data['centris - latitude/longitude'] = latitude + ', ' + longitude if is_duplicate and latitude and longitude else False
                     item_data['centris - street_address'] = street_address if is_duplicate and street_address else False
-
             else:
-                print("Item does not have centris data")  # Debug: Print when centris data is missing
+                print("Item does not have centris data")
 
             if not self.is_duplicate(item_data):
-                # if 'phone' in item_data:
-                #     item_data['phone'] = self.format_phone(item_data['phone'])
                 if 'price' in item_data:
                     item_data['price'] = PriceFormatter.normalize_price(item_data['price'])
 
@@ -444,32 +462,14 @@ class MongoDBPipeline:
                 self.centris_items['centris'] = []
             self.centris_items['centris'].append(item_data)
 
-        self.save_data()
         return item
-
+    
     def is_duplicate(self, item_data):
         for items in self.items.values():
             for existing_item in items:
                 if existing_item['url'] == item_data['url']:
                     return True
         return False
-
-    def signal_handler(self, signal, frame):
-        # Ajouter les clés centris aux éléments AVPP avant la fermeture du script
-        avpp_items = self.items.get(self.spider_name, [])
-        for item in avpp_items:
-            item_centris = item.get('centris')
-            if item_centris:
-                longitude = item_centris.get('longitude')
-                latitude = item_centris.get('latitude')
-                street_address = item_centris.get('street_address')
-                if latitude and longitude and street_address:
-                    is_duplicate = self.is_centris_duplicate(longitude, latitude, street_address)
-                    item['centris - latitude/longitude'] = is_duplicate
-                    item['centris - street_address'] = is_duplicate
-
-        self.save_data()
-        self.close_mongodb()
 
     def format_phone(self, phone):
         formatted_phones = []
