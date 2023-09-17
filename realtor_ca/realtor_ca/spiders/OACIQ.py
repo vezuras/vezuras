@@ -200,7 +200,16 @@ class OaciqSpider(scrapy.Spider):
             if g_response != 0:
                 print("Captcha solution: " + g_response)
                 driver = response.meta['driver']
-                textarea = driver.find_element_by_xpath('//textarea[@id="g-recaptcha-response"]')
+                try:
+                    textarea = WebDriverWait(driver, 20).until(
+                        EC.presence_of_element_located((By.XPATH, '//textarea[@id="g-recaptcha-response"]'))
+                    )
+                    driver.execute_script("arguments[0].style.display = 'block';", textarea)
+                    textarea.send_keys(g_response)
+                except TimeoutException:
+                    print("Couldn't find the CAPTCHA element.")
+                    return
+                
                 driver.execute_script("arguments[0].style.display = 'block';", textarea)
                 textarea.send_keys(g_response)
 
