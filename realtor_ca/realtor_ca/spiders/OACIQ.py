@@ -273,6 +273,10 @@ class OaciqSpider(scrapy.Spider):
                 if label_text == "Catégorie de permis":
                     value_text = value_text.replace("\n", ", ")
 
+                # Si le label est "Courtier", remplacez "\n" par ", "
+                if label_text == "Courtier":
+                    value_text = value_text.replace("\n", ", ")
+
                 # Si le label est "Avis et mentions disciplinaires" et contient "\n", prenez uniquement le texte avant "\n"
                 if label_text == "Avis et mentions disciplinaires" and "\n" in value_text:
                     value_text = value_text.split("\n")[0]
