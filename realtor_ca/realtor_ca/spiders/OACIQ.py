@@ -14,7 +14,7 @@ from datetime import datetime
 
 class OaciqSpider(scrapy.Spider):
     name = 'oaciq_spider'
-    anti_captcha_key = '64e1060923a63aa04ac9437fc3355654'
+    anti_captcha_key = 'fcb53455732f06bfb02d5f27a18813b7'
     custom_settings = {
         'FEED_FORMAT': 'json',
         'FEED_URI': 'result.json'
@@ -45,7 +45,7 @@ class OaciqSpider(scrapy.Spider):
             )
             if popup:
                 self.logger.warning("Service is unavailable. Waiting for 5 minutes before retrying.")
-                time.sleep(60)  # Attendre 5 minutes
+                time.sleep(300)  # Attendre 5 minutes
                 return True  # Retournez True si le popup est détecté
             
         except TimeoutException:
@@ -63,7 +63,7 @@ class OaciqSpider(scrapy.Spider):
     def parse_initial(self, response):
         driver = response.meta['driver']
         all_broker_elements = driver.find_elements_by_xpath('//*[@id="find-brokers-result"]/tbody/tr/td[1]/a')
-        all_broker_links = [broker.get_attribute('href') for broker in all_broker_elements]#[:2]
+        all_broker_links = [broker.get_attribute('href') for broker in all_broker_elements]#[:1]
         broker_links = [url for url in all_broker_links if url not in self.extracted_urls]
 
         if broker_links:
@@ -97,7 +97,7 @@ class OaciqSpider(scrapy.Spider):
 
         # Vérifiez si le bouton "Suivant" est désactivé
         try:
-            next_button_disabled = driver.find_element_by_xpath('//*[@id="find-brokers-result_next"].disabled')
+            next_button_disabled = driver.find_element_by_xpath('//*[@id="find-brokers-result_next" and contains(@class, "disabled")]')
             if next_button_disabled:
                 self.logger.info("Next button is disabled. Returning to the initial page.")
                 yield SeleniumRequest(
@@ -126,7 +126,7 @@ class OaciqSpider(scrapy.Spider):
             
             # Récupérez à nouveau les liens des courtiers
             all_broker_elements = driver.find_elements_by_xpath('//*[@id="find-brokers-result"]/tbody/tr/td[1]/a')
-            all_broker_links = [broker.get_attribute('href') for broker in all_broker_elements]
+            all_broker_links = [broker.get_attribute('href') for broker in all_broker_elements]#[:1]
             broker_links = [url for url in all_broker_links if url not in self.extracted_urls]
 
             # Si de nouveaux liens sont trouvés, définissez first_broker comme le premier de ces nouveaux liens
@@ -170,13 +170,12 @@ class OaciqSpider(scrapy.Spider):
 
     def parse_captcha(self, response):
         driver = response.meta['driver']
-        # Nombre maximum de tentatives pour résoudre le CAPTCHA
         max_retry_attempts = 3
         retry_attempt = 0
 
         # Gérer le popup "Le service est indisponible pour le moment"
         if self.handle_service_unavailable_popup(driver):
-            # Si le popup est détecté et que le script a attendu 2 minutes, reprenez le scraping à partir de la page initiale
+            self.logger.warning("Service unavailable popup detected. Restarting from initial page.")
             yield SeleniumRequest(
                 url='https://www.oaciq.com/fr#trouver-courtier',
                 wait_time=10,
@@ -185,67 +184,75 @@ class OaciqSpider(scrapy.Spider):
                 script='''document.querySelector('input[type="submit"][name="commit"]').click();'''
             )
             return
-        
+
         while retry_attempt < max_retry_attempts:
             time.sleep(self.delay)
-
             solver = recaptchaV2Proxyless()
             solver.set_verbose(1)
             solver.set_key(self.anti_captcha_key)
             solver.set_website_url(response.url)
-            site_key = '6LdHiVEUAAAAAJJXlKK1Jvpk5bk9jzzfnYCNdw53'
-            solver.set_website_key(site_key)
+            solver.set_website_key('6LdHiVEUAAAAAJJXlKK1Jvpk5bk9jzzfnYCNdw53')
 
             g_response = solver.solve_and_return_solution()
             if g_response != 0:
-                print("Captcha solution: " + g_response)
-                driver = response.meta['driver']
+                self.logger.info("Captcha solution: " + g_response)
                 try:
                     textarea = WebDriverWait(driver, 20).until(
                         EC.presence_of_element_located((By.XPATH, '//textarea[@id="g-recaptcha-response"]'))
                     )
                     driver.execute_script("arguments[0].style.display = 'block';", textarea)
                     textarea.send_keys(g_response)
-                except TimeoutException:
-                    print("Couldn't find the CAPTCHA element.")
-                    return
-                
-                driver.execute_script("arguments[0].style.display = 'block';", textarea)
-                textarea.send_keys(g_response)
 
-                submit_button = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.ID, 'find_broker_show_info_submit_button'))
-                )
-                submit_button.click()
-                time.sleep(2)             
-                try:
-                    WebDriverWait(driver, 20).until(
-                        EC.presence_of_element_located((By.XPATH, '//div[@class="col-xs-12 col-sm-6 "]'))
+                    submit_button = WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.ID, 'find_broker_show_info_submit_button'))
                     )
-                    # Sortie de la boucle car le CAPTCHA a été résolu avec succès
-                    break
+                    submit_button.click()
+                    time.sleep(2)
+
+                    # Vérifiez la présence du texte d'erreur
+                    captcha_error_message = "La vérification de reCAPTCHA a échoué. Veuillez réessayer."
+                    error_element = WebDriverWait(driver, 5).until(
+                        EC.presence_of_element_located((By.XPATH, f'//*[contains(text(), "{captcha_error_message}")]'))
+                    )
+                    if error_element:
+                        self.logger.warning("CAPTCHA verification failed. Retrying...")
+                        retry_attempt += 1
+                        continue  # Continue the while loop to retry CAPTCHA resolution
 
                 except TimeoutException:
-                    # Actualisation de la page avant de retenter le CAPTCHA
-                    driver.refresh()
-                    pass  # La tentative de clic échoue, mais nous continuons à l'extérieur de la boucle
+                    # Si le texte d'erreur n'est pas détecté, attendez l'élément souhaité
+                    try:
+                        WebDriverWait(driver, 20).until(
+                            EC.presence_of_element_located((By.XPATH, '//div[@class="col-xs-12 col-sm-6 "]'))
+                        )
+                        break  # CAPTCHA solved successfully
+                    except TimeoutException as e:
+                        self.logger.error(f"Error during CAPTCHA resolution: {e}")
+                        retry_attempt += 1
 
             else:
-                print("Error occurred: " + solver.error_code)
-                break
+                self.logger.error(f"Error occurred during CAPTCHA resolution: {solver.error_code}")
+                retry_attempt += 1
 
-        else:
-            print(f"Échec de la résolution du CAPTCHA après {max_retry_attempts} tentatives.")
-            return
+        if retry_attempt == max_retry_attempts:
+            self.logger.error(f"Failed to solve CAPTCHA after {max_retry_attempts} attempts.")
 
         # Le reste du code pour extraire les informations après le CAPTCHA réussi peut rester inchangé.
         html_content = driver.page_source
         info_dict = OrderedDict()
-        info_dict['URL'] = response.url
+        
+        # Ajout du titre
+        try:
+            title_element = driver.find_element_by_xpath('//h1[@class="no_print"]')
+            title_text = title_element.text.strip().upper() # Convertir en majuscules
+            info_dict['Title'] = title_text
+        except NoSuchElementException:
+            info_dict['Title'] = "N/A"
+
+        # Extraction du nom du courtier
         try:
             broker_name = driver.find_element_by_xpath('//*[@id="register-show"]/div[1]/div').text
             info_dict['Courtier'] = broker_name
-
         except NoSuchElementException:
             info_dict['Courtier'] = "N/A"
 
@@ -273,6 +280,8 @@ class OaciqSpider(scrapy.Spider):
 
         for label in labels:
             extract_information(label)
+        
+        info_dict['URL'] = response.url
 
         # Vérifiez si l'URL a déjà été extraite
         if info_dict['URL'] not in self.extracted_urls:
@@ -295,20 +304,21 @@ class OaciqSpider(scrapy.Spider):
 
             # Sauvegarde JSON
             try:
-                with open(backup_json_filename, 'r', encoding='utf-8') as json_file:
+                # Lisez les données existantes de oaciq_result.json
+                with open('oaciq_result.json', 'r', encoding='utf-8') as json_file:
                     existing_data = json.load(json_file)
-
-                with open('oaciq_result.json', 'w', encoding='utf-8') as json_file:
-                    json.dump(existing_data, json_file, ensure_ascii=False, indent=4)
-
             except (FileNotFoundError, json.JSONDecodeError):
                 existing_data = []
 
+            # Ajoutez les nouvelles données
             existing_data.append(info_dict)
-            with open(backup_json_filename, 'w', encoding='utf-8') as json_file:
+
+            # Écrivez les données combinées dans oaciq_result.json
+            with open('oaciq_result.json', 'w', encoding='utf-8') as json_file:
                 json.dump(existing_data, json_file, ensure_ascii=False, indent=4)
 
-            with open('oaciq_result.json', 'w', encoding='utf-8') as json_file:
+            # Écrivez également les données combinées dans backup_json_filename
+            with open(backup_json_filename, 'w', encoding='utf-8') as json_file:
                 json.dump(existing_data, json_file, ensure_ascii=False, indent=4)
 
         # Passez au courtier suivant
