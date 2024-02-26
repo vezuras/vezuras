@@ -3494,5 +3494,301 @@
         "Speak": "Français, Anglais",
         "Area": "",
         "Date": "2024-02-25"
+    },
+    {
+        "Name": "Marc-Antoine Bondu",
+        "Agency": "RE/MAX DU CARTIER INC.",
+        "Phone": "514-266-4336",
+        "Speak": "Français",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Nicholas Galbraith",
+        "Agency": "IMMOBILIER BAKER",
+        "Phone": "514-592-5251",
+        "Speak": "Anglais",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Alexandra Lomova",
+        "Agency": "RÉSEAU IMMOBILIER ADRESZ",
+        "Phone": "514-244-9519",
+        "Speak": "Anglais, Français, Russe",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Shauna Cohenca Inc.",
+        "Agency": "LES IMMEUBLES CHARISMA INC.",
+        "Phone": "514-924-5676",
+        "Speak": "Anglais, Français",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Julie Boulianne",
+        "Agency": "GROUPE-SUTTON-ALLIANCE INC.",
+        "Phone": "819-372-4555",
+        "Speak": "Français",
+        "Area": "Batiscan, Champlain, Charette, Grandes-Piles, Hérouxville, Lac-aux-Sables, La Tuque, Louiseville, Maskinongé, Notre-Dame-du-Mont-Carmel, Saint-Adelphe, Saint-Alexis-des-Monts, Saint-Barnabé, Saint-Boniface, Sainte-Angèle-de-Prémont, Sainte-Anne-de-la-Pérade, Saint-Édouard-de-Maskinongé, Sainte-Geneviève-de-Batiscan, Saint-Élie-de-Caxton, Sainte-Thècle, Saint-Étienne-des-Grès, Sainte-Ursule, Saint-Justin, Saint-Léon-le-Grand (Mauricie), Saint-Luc-de-Vincennes, Saint-Mathieu-du-Parc, Saint-Maurice, Saint-Narcisse, Saint-Paulin, Saint-Prosper-de-Champlain, Saint-Roch-de-Mékinac, Saint-Sévère, Saint-Séverin (Mauricie), Saint-Stanislas (Mauricie), Saint-Tite, Shawinigan, Trois-Rives, Trois-Rivières, Baie-du-Febvre, Bécancour, Grand-Saint-Esprit, Nicolet, Saint-Célestin - Municipalité, Saint-Célestin - Village, Sainte-Eulalie, Sainte-Perpétue (Centre-du-Québec), Saint-François-du-Lac, Saint-Léonard-d'Aston, Saint-Pierre-les-Becquets, Saint-Wenceslas",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Gilles Thiboutot",
+        "Agency": "VIA CAPITALE ACCÈS",
+        "Phone": "819-212-1282",
+        "Speak": "Français",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Philippe Lefebvre",
+        "Agency": "ROYAL LEPAGE BLANC & NOIR",
+        "Phone": "418-261-6692",
+        "Speak": "Français",
+        "Area": "Baie-Sainte-Catherine, Baie-Saint-Paul, Beaupré, Boischatel, Cap-Santé, Château-Richer, Clermont (Capitale-Nationale), Deschambault-Grondines, Fossambault-sur-le-Lac, Lac-Beauport, Lac-Blanc, Lac-Delage, Lac-Saint-Joseph, Lac-Sergent, L'Ancienne-Lorette, L'Ange-Gardien (Capitale-Nationale), Les Éboulements, Neuville, Petite-Rivière-Saint-François, Pont-Rouge, Portneuf, Québec (Beauport), Québec (Charlesbourg), Québec (La Cité-Limoilou), Québec (La Haute-Saint-Charles), Québec (Les Rivières), Québec (Sainte-Foy/Sillery/Cap-Rouge), Saint-Alban, Saint-Augustin-de-Desmaures, Saint-Basile, Sainte-Anne-de-Beaupré, Sainte-Brigitte-de-Laval, Sainte-Catherine-de-la-Jacques-Cartier, Sainte-Christine-d'Auvergne, Sainte-Famille-de-l’Île-d’Orléans, Sainte-Pétronille, Saint-Ferréol-les-Neiges, Saint-François-de-l'Île-d'Orléans, Saint-Gabriel-de-Valcartier, Saint-Jean-de-l'Île-d'Orléans, Saint-Joachim, Saint-Laurent-de-l'Île-d'Orléans, Saint-Léonard-de-Portneuf, Saint-Marc-des-Carrières, Saint-Pierre-de-l'Île-d'Orléans, Saint-Raymond, Shannon, Stoneham-et-Tewkesbury, Territoires autres/Other Territories (Capitale-Nationale), Wendake",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Jeannine Pelletier",
+        "Agency": "SERVICES IMMOBILIERS À LA CARTE",
+        "Phone": "514-236-0963",
+        "Speak": "Français",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Spyros Dourakis",
+        "Agency": "RE/MAX DU CARTIER INC.",
+        "Phone": "514-312-0322",
+        "Speak": "Français, Anglais, Grec, Espagnol",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "François Couillard",
+        "Agency": "ROYAL LEPAGE BLANC & NOIR",
+        "Phone": "581-745-7879",
+        "Speak": "Français",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Michael Stifo",
+        "Agency": "LES IMMEUBLES CHARISMA INC.",
+        "Phone": "514-625-3896",
+        "Speak": "Anglais, Français, Arabe, Russe",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Jean-Philippe Beaudet",
+        "Agency": "RE/MAX RENAISSANCE INC.",
+        "Phone": "438-863-2484",
+        "Speak": "Français, Anglais",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Suzanne Proulx",
+        "Agency": "SUZANNE PROULX",
+        "Phone": "514-915-5950",
+        "Speak": "Français",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Alain Fournier",
+        "Agency": "RE/MAX DIRECT INC.",
+        "Phone": "819-213-4747",
+        "Speak": "Français, Anglais",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Chantal Oliveira",
+        "Agency": "RE/MAX DU CARTIER INC.",
+        "Phone": "514-501-3610",
+        "Speak": "Anglais",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Sylvain Parisien",
+        "Agency": "RE/MAX VISION",
+        "Phone": "819-213-6809",
+        "Speak": "Français",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Yannick Ménard",
+        "Agency": "ENGEL & VÖLKERS MONTRÉAL",
+        "Phone": "514-935-8989",
+        "Speak": "Français, Anglais",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Daniel Daignault",
+        "Agency": "RE/MAX VISION",
+        "Phone": "819-319-9191",
+        "Speak": "Français, Anglais",
+        "Area": "Cantley, Chelsea, Gatineau (Aylmer), Gatineau (Buckingham), Gatineau (Gatineau), Gatineau (Hull), Gatineau (Masson-Angers), L'Ange-Gardien (Outaouais), Val-des-Monts, Val-des-Bois, Thurso, Thorne, Pontiac, Montebello",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Sophie Savaria",
+        "Agency": "SOTHEBY'S INTERNATIONAL REALTY QUÉBEC",
+        "Phone": "514-287-7434 #187",
+        "Speak": "Anglais, Français",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Stéphanie Meloche",
+        "Agency": "RE/MAX ALLIANCE INC.",
+        "Phone": "514-374-4000",
+        "Speak": "Français, Anglais",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Erik Durivage",
+        "Agency": "RE/MAX ÉVOLUTION INC.",
+        "Phone": "450-931-1002",
+        "Speak": "Français",
+        "Area": "Ange-Gardien, Farnham, Brigham, Cowansville, Bromont, Mont-Saint-Grégoire",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Nawal Lebah",
+        "Agency": "VIA CAPITALE ÉLITE",
+        "Phone": "418-653-1236",
+        "Speak": "Français",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Olivier Couture",
+        "Agency": "ROYAL LEPAGE URBAIN",
+        "Phone": "514-830-2256",
+        "Speak": "Français, Anglais",
+        "Area": "Montréal (Anjou), Montréal (Mercier/Hochelaga-Maisonneuve), Montréal (Montréal-Nord), Montréal (Rivière-des-Prairies/Pointe-aux-Trembles), Montréal (Rosemont/La Petite-Patrie), Montréal (Saint-Léonard), Montréal (Villeray/Saint-Michel/Parc-Extension), Montréal-Est, Boucherville, Repentigny (Le Gardeur), Repentigny (Repentigny), Charlemagne, L'Assomption, Longueuil (Greenfield Park), Longueuil (Le Vieux-Longueuil), Longueuil (Saint-Hubert), Saint-Sauveur, Morin-Heights, Val-Morin, Saint-Adolphe-d'Howard, Terrebonne (Lachenaie), Terrebonne (La Plaine), Terrebonne (Terrebonne)",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Giulio Nudo",
+        "Agency": "RE/MAX ALLIANCE INC.",
+        "Phone": "438-862-3691",
+        "Speak": "Anglais",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Jeffrey Groper",
+        "Agency": "BLVD IMMOBILIER",
+        "Phone": "514-295-8829",
+        "Speak": "Anglais, Français",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Meyer Elhadad",
+        "Agency": "GROUPE IMMOBILIER MK INC.",
+        "Phone": "514-965-3322",
+        "Speak": "Français, Anglais, Hébreu",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Gestion Geneviève Dubuc inc.",
+        "Agency": "ROYAL LEPAGE MÉRITAS DU SUROÎT",
+        "Phone": "450-377-6636",
+        "Speak": "Français",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Daniel Lavigne",
+        "Agency": "VENDIRECT INC.",
+        "Phone": "514-898-5101",
+        "Speak": "Français",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Edith Castonguay",
+        "Agency": "PROPRIO DIRECT",
+        "Phone": "581-888-0902",
+        "Speak": "Français",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Isabelle Mercier",
+        "Agency": "RE/MAX SOLUTIONS",
+        "Phone": "514-303-9777",
+        "Speak": "Français",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Caroline Boudreau",
+        "Agency": "VENDIRECT INC.",
+        "Phone": "450-653-2650",
+        "Speak": "Français, Anglais",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Sophie Patera",
+        "Agency": "EXP AGENCE IMMOBILIÈRE",
+        "Phone": "514-778-7572",
+        "Speak": "Français, Anglais",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Serge Cayanong",
+        "Agency": "RE/MAX PLATINE",
+        "Phone": "514-295-3816",
+        "Speak": "Français, Anglais",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Noura Larichi",
+        "Agency": "VENDIRECT INC.",
+        "Phone": "514-825-8922",
+        "Speak": "Français, Anglais",
+        "Area": "Chertsey, Entrelacs, Joliette, Terrebonne (La Plaine), Terrebonne (Lachenaie), Repentigny (Le Gardeur), Mascouche, Notre-Dame-de-la-Merci, Rawdon, Repentigny (Repentigny), Saint-Calixte, Saint-Donat (Lanaudière), Saint-Esprit, Sainte-Julienne, Saint-Lin/Laurentides, Saint-Roch-de-l'Achigan, Terrebonne (Terrebonne), Blainville, Boisbriand, Bois-des-Filion, Deux-Montagnes, Lantier, Lorraine, Mille-Isles, Mirabel, Morin-Heights, Oka, Piedmont, Prévost, Rosemère, Saint-Adolphe-d'Howard, Saint-Colomban, Sainte-Adèle, Sainte-Agathe-des-Monts, Sainte-Anne-des-Lacs, Sainte-Anne-des-Plaines, Sainte-Lucie-des-Laurentides, Sainte-Marguerite-du-Lac-Masson, Sainte-Thérèse, Sainte-Sophie, Saint-Eustache, Saint-Hippolyte, Saint-Jérôme, Saint-Sauveur, Val-David, Val-Morin, Laval (Auteuil), Laval (Chomedey), Laval (Laval-des-Rapides), Laval (Sainte-Rose)",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Georges Azzi",
+        "Agency": "PROFUSION IMMOBILIER INC.",
+        "Phone": "514-802-0020",
+        "Speak": "Français, Anglais, Arabe",
+        "Area": "Montréal (Ahuntsic-Cartierville), Montréal (Côte-des-Neiges/Notre-Dame-de-Grâce), Montréal (Le Plateau-Mont-Royal), Mont-Royal, Montréal (Outremont), Montréal (Saint-Laurent), Montréal (Ville-Marie), Montréal (Villeray/Saint-Michel/Parc-Extension), Westmount, Laval (Chomedey), Laval (Laval-des-Rapides), Laval (Sainte-Dorothée), Laval (Laval-sur-le-Lac)",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Sherif A Sayed",
+        "Agency": "ROYAL LEPAGE ALTITUDE",
+        "Phone": "514-898-4849",
+        "Speak": "Français, Anglais, Arabe, Espagnol",
+        "Area": "",
+        "Date": "2024-02-25"
+    },
+    {
+        "Name": "Denis Lefebvre",
+        "Agency": "ROYAL LEPAGE TENDANCE",
+        "Phone": "514-503-1655",
+        "Speak": "Français, Anglais",
+        "Area": "Côte-Saint-Luc, Hampstead, Mont-Royal, Montréal (Ahuntsic-Cartierville), Montréal (Anjou), Montréal (Côte-des-Neiges/Notre-Dame-de-Grâce), Montréal (LaSalle), Montréal (Le Plateau-Mont-Royal), Montréal (Le Sud-Ouest), Montréal (Mercier/Hochelaga-Maisonneuve), Montréal (Outremont), Montréal (Pierrefonds-Roxboro), Montréal (Rosemont/La Petite-Patrie), Montréal (Saint-Laurent), Montréal (Verdun/Île-des-Soeurs), Montréal (Ville-Marie), Montréal (Villeray/Saint-Michel/Parc-Extension), Montréal-Est, Montréal-Ouest, Sainte-Anne-de-Bellevue, Westmount, Laval (Auteuil), Laval (Chomedey), Laval (Duvernay), Laval (Fabreville), Laval (Laval-des-Rapides), Laval (Laval-Ouest), Laval (Laval-sur-le-Lac), Laval (Pont-Viau), Laval (Saint-François), Laval (Saint-Vincent-de-Paul), Laval (Sainte-Dorothée), Laval (Sainte-Rose), Laval (Vimont)",
+        "Date": "2024-02-25"
     }
 ]
